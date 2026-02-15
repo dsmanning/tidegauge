@@ -32,6 +32,7 @@ env/
 .env
 .env.*
 arduino/ttn_otaa_lmic/config.h
+.beads/
 
 # Build/distribution artifacts
 build/

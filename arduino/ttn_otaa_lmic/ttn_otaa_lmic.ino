@@ -18,7 +18,7 @@ static uint8_t DEVEUI[8];
 static uint8_t APPKEY[16];
 
 static osjob_t sendjob;
-static const unsigned TX_INTERVAL_S = 60;
+static const unsigned TX_INTERVAL_S = 300;
 static const unsigned RETRY_INTERVAL_S = 5;
 
 // HC-SR04 wiring (Adafruit Feather labels):

@@ -21,3 +21,12 @@ def test_sketch_uses_external_config_header() -> None:
     assert '"config.h"' in content
     assert '"config.example.h"' in content
     assert "LMIC_selectSubBand(tg_config::US915_SUBBAND)" in content
+
+
+def test_sketch_does_not_include_temporary_join_diagnostics() -> None:
+    sketch_path = Path("arduino/ttn_otaa_lmic/ttn_otaa_lmic.ino")
+    content = sketch_path.read_text(encoding="utf-8")
+
+    assert "CFG: subband=" not in content
+    assert "CFG: eui_checksum=0x" not in content
+    assert "eui_checksum(" not in content
