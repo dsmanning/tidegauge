@@ -1,4 +1,7 @@
-from typing import Protocol
+try:
+    from typing import Protocol
+except ImportError:  # pragma: no cover - CircuitPython compatibility
+    Protocol = object
 
 from tidegauge.app.pipeline import run_measurement_cycle
 from tidegauge.calibration import CalibrationConfig

@@ -1,4 +1,7 @@
-from typing import Protocol
+try:
+    from typing import Protocol
+except ImportError:  # pragma: no cover - CircuitPython compatibility
+    Protocol = object
 
 from tidegauge.ultrasonic import echo_duration_us_to_distance_m
 

@@ -1,5 +1,7 @@
-from dataclasses import dataclass
-from typing import Any
+try:
+    from typing import Any
+except ImportError:  # pragma: no cover - CircuitPython compatibility
+    Any = object
 
 from tidegauge.adapters.hcsr04 import Hcsr04PulseReader
 from tidegauge.adapters.radio import Rfm95RadioAdapter
@@ -8,22 +10,38 @@ from tidegauge.adapters.ultrasonic import UltrasonicDurationAdapter
 from tidegauge.scheduler import MinuteScheduler
 
 
-@dataclass(frozen=True)
 class HardwareConfig:
-    trigger_pin_id: int
-    echo_pin_id: int
-    measurement_interval_s: int = 60
-    max_send_attempts: int = 3
+    def __init__(
+        self,
+        *,
+        trigger_pin_id: int,
+        echo_pin_id: int,
+        measurement_interval_s: int = 60,
+        max_send_attempts: int = 3,
+    ) -> None:
+        self.trigger_pin_id = trigger_pin_id
+        self.echo_pin_id = echo_pin_id
+        self.measurement_interval_s = measurement_interval_s
+        self.max_send_attempts = max_send_attempts
 
 
-@dataclass(frozen=True)
 class RuntimeDependencies:
-    sensor: Any
-    radio: Any
-    scheduler: MinuteScheduler
-    clock: SystemClockAdapter
-    sleeper: SystemSleepAdapter
-    max_send_attempts: int
+    def __init__(
+        self,
+        *,
+        sensor: Any,
+        radio: Any,
+        scheduler: MinuteScheduler,
+        clock: SystemClockAdapter,
+        sleeper: SystemSleepAdapter,
+        max_send_attempts: int,
+    ) -> None:
+        self.sensor = sensor
+        self.radio = radio
+        self.scheduler = scheduler
+        self.clock = clock
+        self.sleeper = sleeper
+        self.max_send_attempts = max_send_attempts
 
 
 def build_runtime_dependencies(

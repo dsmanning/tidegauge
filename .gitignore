@@ -31,6 +31,7 @@ env/
 # Local environment/config
 .env
 .env.*
+arduino/ttn_otaa_lmic/config.h
 
 # Build/distribution artifacts
 build/

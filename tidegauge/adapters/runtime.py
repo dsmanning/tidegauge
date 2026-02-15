@@ -1,5 +1,8 @@
 import time
-from typing import Protocol
+try:
+    from typing import Protocol
+except ImportError:  # pragma: no cover - CircuitPython compatibility
+    Protocol = object
 
 
 class TimeModule(Protocol):

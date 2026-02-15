@@ -1,4 +1,10 @@
-from typing import Any, Callable
+try:
+    from typing import Any, Callable
+except ImportError:  # pragma: no cover - CircuitPython compatibility
+    Any = object
+    class Callable:  # type: ignore[no-redef]
+        def __class_getitem__(cls, _item):
+            return cls
 
 from tidegauge.board import run_device_loop
 from tidegauge.hardware import HardwareConfig

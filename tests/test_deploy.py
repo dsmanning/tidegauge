@@ -39,8 +39,10 @@ def test_deploy_project_to_mount_copies_runtime_files(tmp_path: Path) -> None:
     copied = deploy_project_to_mount(project_root=source, mount_point=mount)
     copied_rel = [str(path.relative_to(mount)) for path in copied]
 
+    assert "code.py" in copied_rel
     assert "main.py" in copied_rel
     assert "tidegauge/alpha.py" in copied_rel
+    assert (mount / "code.py").read_text() == "from main import main\n\nmain()\n"
     assert (mount / "main.py").read_text() == "print('main')"
     assert (mount / "tidegauge" / "alpha.py").read_text() == "alpha = 1"
 

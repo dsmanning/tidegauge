@@ -1,4 +1,10 @@
-from typing import Any, Callable
+try:
+    from typing import Any, Callable
+except ImportError:  # pragma: no cover - CircuitPython compatibility
+    Any = object
+    class Callable:  # type: ignore[no-redef]
+        def __class_getitem__(cls, _item):
+            return cls
 
 from tidegauge.app.runtime_loop import run_runtime_iterations
 from tidegauge.hardware import HardwareConfig, RuntimeDependencies, build_runtime_dependencies
@@ -12,6 +18,7 @@ def run_device_loop(
     hardware_config: HardwareConfig,
     calibration_path: Any,
     max_loops: int | None = None,
+    log_fn: Callable[[str], None] = print,
     build_dependencies: Callable[..., RuntimeDependencies] = build_runtime_dependencies,
     run_iterations: Callable[..., int] = run_runtime_iterations,
 ) -> int:
@@ -34,6 +41,7 @@ def run_device_loop(
             sleeper=deps.sleeper,
             sleep_seconds=1,
             max_send_attempts=deps.max_send_attempts,
+            log_fn=log_fn,
         )
         loop_count += 1
 

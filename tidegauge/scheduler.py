@@ -1,4 +1,9 @@
-from collections.abc import Callable
+try:
+    from collections.abc import Callable
+except ImportError:  # pragma: no cover - CircuitPython compatibility
+    class Callable:  # type: ignore[no-redef]
+        def __class_getitem__(cls, _item):
+            return cls
 
 
 class MinuteScheduler:

@@ -41,6 +41,11 @@ class FlakyRadio:
         self.sent_payloads.append(payload)
 
 
+class FailingSensor:
+    def read_distance_m(self) -> float:
+        raise RuntimeError("sensor timeout")
+
+
 def test_run_runtime_iterations_skips_send_when_uncalibrated(
     tmp_path: Path,
 ) -> None:
@@ -175,3 +180,89 @@ def test_run_runtime_iterations_stops_retrying_after_attempt_limit(
     assert sent_count == 0
     assert radio.calls == 3
     assert radio.sent_payloads == []
+
+
+def test_run_runtime_iterations_continues_when_sensor_read_raises(
+    tmp_path: Path,
+) -> None:
+    calibration_path = tmp_path / "calibration.json"
+    save_calibration_config(
+        path=calibration_path,
+        config=CalibrationConfig(geometry_reference_m=2.5, datum_offset_m=0.2),
+    )
+    scheduler = SequenceScheduler([True, True])
+    sensor = FailingSensor()
+    radio = FakeRadioPort()
+    sleeper = FakeSleepPort()
+
+    sent_count = run_runtime_iterations(
+        iterations=2,
+        calibration_path=calibration_path,
+        scheduler=scheduler,
+        sensor=sensor,
+        radio=radio,
+        sleeper=sleeper,
+        sleep_seconds=1,
+    )
+
+    assert sent_count == 0
+    assert radio.sent_payloads == []
+    assert sleeper.sleep_calls_s == [1, 1]
+
+
+def test_run_runtime_iterations_emits_diagnostics_for_sensor_failure(
+    tmp_path: Path,
+) -> None:
+    calibration_path = tmp_path / "calibration.json"
+    save_calibration_config(
+        path=calibration_path,
+        config=CalibrationConfig(geometry_reference_m=2.5, datum_offset_m=0.2),
+    )
+    scheduler = SequenceScheduler([True])
+    sensor = FailingSensor()
+    radio = FakeRadioPort()
+    sleeper = FakeSleepPort()
+    logs: list[str] = []
+
+    sent_count = run_runtime_iterations(
+        iterations=1,
+        calibration_path=calibration_path,
+        scheduler=scheduler,
+        sensor=sensor,
+        radio=radio,
+        sleeper=sleeper,
+        sleep_seconds=1,
+        log_fn=logs.append,
+    )
+
+    assert sent_count == 0
+    assert any("sensor timeout" in line for line in logs)
+
+
+def test_run_runtime_iterations_logs_radio_send_error_reason(
+    tmp_path: Path,
+) -> None:
+    calibration_path = tmp_path / "calibration.json"
+    save_calibration_config(
+        path=calibration_path,
+        config=CalibrationConfig(geometry_reference_m=2.5, datum_offset_m=0.2),
+    )
+    scheduler = SequenceScheduler([True])
+    sensor = FakeUltrasonicSensorPort(readings_m=[1.4])
+    radio = FailingRadio()
+    sleeper = FakeSleepPort()
+    logs: list[str] = []
+
+    run_runtime_iterations(
+        iterations=1,
+        calibration_path=calibration_path,
+        scheduler=scheduler,
+        sensor=sensor,
+        radio=radio,
+        sleeper=sleeper,
+        sleep_seconds=1,
+        max_send_attempts=1,
+        log_fn=logs.append,
+    )
+
+    assert any("simulated uplink failure" in line for line in logs)

@@ -1,8 +1,10 @@
-# Remote Tide Gauge (MicroPython + TTN)
+# Remote Tide Gauge (Feather RP2040 + TTN)
 
-This project builds a remote tide gauge using an Adafruit Feather RP2040 with an RFM95 LoRa radio and an HC-SR04 ultrasonic sensor.
+This project builds a remote tide gauge using an Adafruit Feather RP2040 RFM, an RFM95 LoRa radio, and an HC-SR04 ultrasonic sensor.
 
 The sensor is mounted at the top of a tube and measures water height inside the tube. The Feather samples once per minute, packages the reading, and sends it through LoRaWAN to The Things Network (TTN) via your local TTN gateway.
+
+Current radio/uplink path is Arduino LMIC OTAA firmware in `arduino/ttn_otaa_lmic`.
 
 ## Hardware
 
@@ -37,7 +39,7 @@ Code is designed for testability:
 1. Trigger measurement every 60 seconds.
 2. Read distance from HC-SR04.
 3. Convert distance to water height using calibration constants.
-4. Build payload with reading + metadata.
+4. Build payload as signed millimeters (`int16`, big-endian).
 5. Transmit payload through RFM95/LoRaWAN to TTN.
 6. Log status/errors to serial for diagnostics.
 
@@ -79,3 +81,50 @@ TDD impact:
 ## Project status
 
 Repository documentation initialized. Implementation will proceed in TDD cycles using the constraints and workflow defined in `AGENTS.md`.
+
+## Pi-to-Feather Workflow
+
+Use this sequence for deployment and runtime verification from the Raspberry Pi host.
+
+1. Run host tests:
+   `python3 -m pytest -q`
+2. Confirm device connectivity:
+   `lsblk -f` and verify `/dev/sda` (mounted volume) plus `/dev/ttyACM0` (serial).
+3. Compile Arduino firmware:
+   - First copy/edit config:
+     `cp arduino/ttn_otaa_lmic/config.example.h arduino/ttn_otaa_lmic/config.h`
+   - Set `DEV_EUI_HEX`, `APP_EUI_HEX`, `APP_KEY_HEX`, `US915_SUBBAND`, `GEOMETRY_REFERENCE_M`, and `DATUM_OFFSET_M` in `arduino/ttn_otaa_lmic/config.h`.
+   - `config.h` is git-ignored by design; keep real credentials only in that local file.
+   `arduino-cli compile -b rp2040:rp2040:adafruit_feather_rfm arduino/ttn_otaa_lmic`
+4. Upload Arduino firmware:
+   `arduino-cli upload -b rp2040:rp2040:adafruit_feather_rfm -p /dev/ttyACM0 arduino/ttn_otaa_lmic`
+5. Monitor serial runtime logs on `/dev/ttyACM0` and verify a measurement/send cycle appears once per minute.
+6. Confirm uplinks in TTN for the same time window as serial logs.
+
+## TTN Credentials (Arduino LMIC)
+
+Set OTAA credentials in `arduino/ttn_otaa_lmic/config.h`:
+
+- `DEV_EUI_HEX`
+- `APP_EUI_HEX`
+- `APP_KEY_HEX`
+- `US915_SUBBAND` (typically `2` for TTN US915 setups)
+
+These are parsed at startup; invalid hex length/content aborts boot with a serial error.
+
+## Sensor Wiring And Calibration
+
+HC-SR04 pinout (Feather labels):
+
+- `TRIG` -> `D6`
+- `ECHO` -> `D5`
+- `VCC` -> `5V`
+- `GND` -> `GND`
+
+Firmware calibration constants are in `arduino/ttn_otaa_lmic/config.h`:
+
+- `GEOMETRY_REFERENCE_M`
+- `DATUM_OFFSET_M`
+
+Conversion formula:
+`tide_height_m = geometry_reference_m - measured_distance_m - datum_offset_m`

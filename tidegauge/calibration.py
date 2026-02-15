@@ -1,14 +1,24 @@
-from dataclasses import dataclass
-
-
 class CalibrationNotSetError(RuntimeError):
     """Raised when tide datum calibration is required but not configured."""
 
 
-@dataclass(frozen=True)
 class CalibrationConfig:
-    geometry_reference_m: float | None
-    datum_offset_m: float | None
+    def __init__(
+        self,
+        *,
+        geometry_reference_m: float | None,
+        datum_offset_m: float | None,
+    ) -> None:
+        self.geometry_reference_m = geometry_reference_m
+        self.datum_offset_m = datum_offset_m
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, CalibrationConfig):
+            return False
+        return (
+            self.geometry_reference_m == other.geometry_reference_m
+            and self.datum_offset_m == other.datum_offset_m
+        )
 
     @property
     def is_calibrated(self) -> bool:
