@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from tidegauge.adapters.radio import RadioSendError
 from tidegauge.app.service import SchedulerPort, run_cycle_if_due
 from tidegauge.calibration import CalibrationNotSetError
 from tidegauge.calibration_store import load_calibration_config
@@ -28,6 +29,8 @@ def run_runtime_iterations(
                 config=config,
             )
         except CalibrationNotSetError:
+            payload = None
+        except RadioSendError:
             payload = None
 
         if payload is not None:
