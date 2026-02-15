@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from tidegauge.main import run_main
 
 
@@ -21,7 +19,7 @@ def test_run_main_passes_config_and_returns_sent_count() -> None:
         lora_client=object(),
         trigger_pin_id=6,
         echo_pin_id=7,
-        calibration_path=Path("/tmp/calibration.json"),
+        calibration_path="/tmp/calibration.json",
         measurement_interval_s=60,
         max_send_attempts=3,
         run_device_loop_fn=run_device_loop,
@@ -35,3 +33,4 @@ def test_run_main_passes_config_and_returns_sent_count() -> None:
     assert config.echo_pin_id == 7
     assert config.measurement_interval_s == 60
     assert config.max_send_attempts == 3
+    assert run_device_loop.calls[0]["calibration_path"] == "/tmp/calibration.json"

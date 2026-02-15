@@ -1,4 +1,3 @@
-from pathlib import Path
 from typing import Any, Callable
 
 from tidegauge.board import run_device_loop
@@ -12,7 +11,7 @@ def run_main(
     lora_client: Any,
     trigger_pin_id: int,
     echo_pin_id: int,
-    calibration_path: Path,
+    calibration_path: Any,
     measurement_interval_s: int = 60,
     max_send_attempts: int = 3,
     max_loops: int | None = None,

@@ -1,11 +1,9 @@
-from pathlib import Path
-
 from tidegauge.main import run_main
 
 
 TRIGGER_PIN_ID = 6
 ECHO_PIN_ID = 7
-CALIBRATION_PATH = Path("/calibration.json")
+CALIBRATION_PATH = "/calibration.json"
 MEASUREMENT_INTERVAL_S = 60
 MAX_SEND_ATTEMPTS = 3
 

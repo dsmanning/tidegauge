@@ -1,4 +1,3 @@
-from pathlib import Path
 from typing import Any, Callable
 
 from tidegauge.app.runtime_loop import run_runtime_iterations
@@ -11,7 +10,7 @@ def run_device_loop(
     time_module: Any,
     lora_client: Any,
     hardware_config: HardwareConfig,
-    calibration_path: Path,
+    calibration_path: Any,
     max_loops: int | None = None,
     build_dependencies: Callable[..., RuntimeDependencies] = build_runtime_dependencies,
     run_iterations: Callable[..., int] = run_runtime_iterations,

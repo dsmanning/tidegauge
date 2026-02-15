@@ -22,3 +22,13 @@ def test_load_calibration_config_returns_uncalibrated_when_missing_file(
     loaded = load_calibration_config(path=calibration_path)
 
     assert loaded == CalibrationConfig(geometry_reference_m=None, datum_offset_m=None)
+
+
+def test_save_and_load_calibration_config_supports_string_path(tmp_path: Path) -> None:
+    calibration_path = str(tmp_path / "calibration.json")
+    original = CalibrationConfig(geometry_reference_m=2.5, datum_offset_m=0.2)
+
+    save_calibration_config(path=calibration_path, config=original)
+    loaded = load_calibration_config(path=calibration_path)
+
+    assert loaded == original
