@@ -100,3 +100,29 @@ def test_encode_tide_height_rejects_out_of_range_payload() -> None:
     )
 
     assert output == "invalid"
+
+
+def test_encode_tide_distance_and_battery_payload() -> None:
+    output = _compile_and_run(
+        """
+        #include <iostream>
+        #include "tide_math.h"
+
+        int main() {
+            std::uint8_t payload[6] = {0, 0, 0, 0, 0, 0};
+            if (!tidegauge::encode_tide_distance_battery_payload(0.283f, 0.742f, 3.95f, payload)) {
+                return 1;
+            }
+            std::cout
+                << static_cast<unsigned>(payload[0]) << " "
+                << static_cast<unsigned>(payload[1]) << " "
+                << static_cast<unsigned>(payload[2]) << " "
+                << static_cast<unsigned>(payload[3]) << " "
+                << static_cast<unsigned>(payload[4]) << " "
+                << static_cast<unsigned>(payload[5]);
+            return 0;
+        }
+        """
+    )
+
+    assert output == "1 27 2 230 15 110"

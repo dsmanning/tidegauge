@@ -112,6 +112,16 @@ Set OTAA credentials in `arduino/ttn_otaa_lmic/config.h`:
 
 These are parsed at startup; invalid hex length/content aborts boot with a serial error.
 
+## TTN Payload Formatter
+
+Use `ttn/uplink_decoder.js` as the TTN JavaScript uplink payload formatter.
+
+Current uplink payload format is 6 bytes:
+
+- Bytes `0-1`: `tide_height_mm` (signed int16, big-endian)
+- Bytes `2-3`: `raw_distance_mm` (unsigned uint16, big-endian)
+- Bytes `4-5`: `battery_mv` (unsigned uint16, big-endian)
+
 ## Sensor Wiring And Calibration
 
 HC-SR04 pinout (Feather labels):

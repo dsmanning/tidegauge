@@ -26,6 +26,8 @@ static const unsigned RETRY_INTERVAL_S = 5;
 static const int HCSR04_TRIG_PIN = D6;
 static const int HCSR04_ECHO_PIN = D5;
 static const unsigned long HCSR04_TIMEOUT_US = 30000UL;
+static const int BATTERY_ADC_PIN = 29;
+static const float BATTERY_DIVIDER_RATIO = 2.0f;
 
 void os_getArtEui(u1_t *buf) { memcpy(buf, APPEUI, 8); }
 void os_getDevEui(u1_t *buf) { memcpy(buf, DEVEUI, 8); }
@@ -71,6 +73,12 @@ static void reverse_bytes(uint8_t *buf, size_t len) {
     }
 }
 
+static float read_battery_voltage_v() {
+    const int raw = analogRead(BATTERY_ADC_PIN);
+    const float adc_v = (static_cast<float>(raw) * 3.3f) / 4095.0f;
+    return adc_v * BATTERY_DIVIDER_RATIO;
+}
+
 static void do_send(osjob_t *j) {
     (void)j;
 
@@ -92,6 +100,7 @@ static void do_send(osjob_t *j) {
         }
 
         const float measured_distance_m = (static_cast<float>(pulse_us) * 0.000343f) / 2.0f;
+        const float battery_voltage_v = read_battery_voltage_v();
         float tide_height_m = 0.0f;
         if (!tidegauge::compute_tide_height_m(
                 tg_config::GEOMETRY_REFERENCE_M, measured_distance_m, tg_config::DATUM_OFFSET_M, &tide_height_m)) {
@@ -100,9 +109,10 @@ static void do_send(osjob_t *j) {
             return;
         }
 
-        uint8_t payload[2] = {0, 0};
-        if (!tidegauge::encode_tide_height_payload(tide_height_m, payload)) {
-            Serial.println("PAYLOAD: tide height out of int16 range");
+        uint8_t payload[6] = {0, 0, 0, 0, 0, 0};
+        if (!tidegauge::encode_tide_distance_battery_payload(
+                tide_height_m, measured_distance_m, battery_voltage_v, payload)) {
+            Serial.println("PAYLOAD: tide/distance/battery out of encodable range");
             os_setTimedCallback(&sendjob, os_getTime() + sec2osticks(TX_INTERVAL_S), do_send);
             return;
         }
@@ -112,10 +122,20 @@ static void do_send(osjob_t *j) {
         Serial.print(measured_distance_m, 3);
         Serial.print(" tide_height_m=");
         Serial.print(tide_height_m, 3);
+        Serial.print(" battery_v=");
+        Serial.print(battery_voltage_v, 3);
         Serial.print(" payload=");
         Serial.print(payload[0], HEX);
         Serial.print(" ");
-        Serial.println(payload[1], HEX);
+        Serial.print(payload[1], HEX);
+        Serial.print(" ");
+        Serial.print(payload[2], HEX);
+        Serial.print(" ");
+        Serial.print(payload[3], HEX);
+        Serial.print(" ");
+        Serial.print(payload[4], HEX);
+        Serial.print(" ");
+        Serial.println(payload[5], HEX);
     }
 }
 
@@ -172,6 +192,7 @@ void setup() {
     pinMode(HCSR04_TRIG_PIN, OUTPUT);
     pinMode(HCSR04_ECHO_PIN, INPUT);
     digitalWrite(HCSR04_TRIG_PIN, LOW);
+    analogReadResolution(12);
 
     os_init();
     LMIC_reset();
