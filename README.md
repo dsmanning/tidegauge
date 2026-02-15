@@ -41,6 +41,31 @@ Code is designed for testability:
 5. Transmit payload through RFM95/LoRaWAN to TTN.
 6. Log status/errors to serial for diagnostics.
 
+## Tide Datum Calibration (Post-Install)
+
+The device must support datum calibration after physical installation at the final site.
+
+- Raw measurement from the ultrasonic sensor is distance from sensor-to-water surface.
+- Tide height requires a site-specific datum offset that is not final until installation.
+- The software should apply:
+  - `tide_height = geometry_reference - measured_distance - datum_offset`
+  - Where `geometry_reference` (sensor-to-reference geometry) and `datum_offset` are configurable calibration values.
+
+Recommended calibration workflow:
+
+1. Install and mechanically secure the sensor in final position.
+2. Take one or more manual reference readings against known local tide datum.
+3. Compute/update `datum_offset` (and `geometry_reference` if needed).
+4. Persist calibration values in device configuration.
+5. Verify reported tide height against reference observations.
+
+TDD impact:
+
+- Add tests first for calibration math and configuration handling.
+- Verify behavior before calibration is set (safe defaults/error handling).
+- Verify updated calibration changes only conversion output, not transport logic.
+- Keep calibration logic in pure, testable code paths with hardware mocked.
+
 ## Testing strategy
 
 - Host-side unit tests validate:
