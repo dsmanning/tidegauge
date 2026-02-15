@@ -38,6 +38,7 @@ arduino/ttn_otaa_lmic/config.h
 build/
 dist/
 *.egg-info/
+AGENTS.md
 
 # MicroPython / deployment helpers
 *.mpy
