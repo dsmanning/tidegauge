@@ -1,0 +1,46 @@
+# OS / filesystem noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Python / test artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE/editor
+.vscode/
+.idea/
+
+# Local environment/config
+.env
+.env.*
+
+# Build/distribution artifacts
+build/
+dist/
+*.egg-info/
+
+# MicroPython / deployment helpers
+*.mpy
+mpremote.log
+
+# Temporary logs/data captures
+*.log
+*.tmp
