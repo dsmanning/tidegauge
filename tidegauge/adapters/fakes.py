@@ -17,3 +17,21 @@ class FakeRadioPort:
 
     def send(self, payload: bytes) -> None:
         self.sent_payloads.append(payload)
+
+
+@dataclass
+class FakeClockPort:
+    times_s: list[int]
+
+    def now_s(self) -> int:
+        if not self.times_s:
+            raise RuntimeError("No clock values remaining")
+        return self.times_s.pop(0)
+
+
+@dataclass
+class FakeSleepPort:
+    sleep_calls_s: list[int] = field(default_factory=list)
+
+    def sleep_s(self, seconds: int) -> None:
+        self.sleep_calls_s.append(seconds)

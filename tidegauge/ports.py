@@ -9,3 +9,13 @@ class UltrasonicSensorPort(Protocol):
 class RadioPort(Protocol):
     def send(self, payload: bytes) -> None:
         """Send a binary payload over radio transport."""
+
+
+class ClockPort(Protocol):
+    def now_s(self) -> int:
+        """Return current monotonic/runtime seconds."""
+
+
+class SleepPort(Protocol):
+    def sleep_s(self, seconds: int) -> None:
+        """Suspend execution for a number of seconds."""
