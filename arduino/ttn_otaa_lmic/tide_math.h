@@ -2,6 +2,7 @@
 #define TIDEGAUGE_TIDE_MATH_H
 
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 
 namespace tidegauge {
@@ -17,6 +18,65 @@ inline bool compute_tide_height_m(
     }
 
     *out_tide_height_m = geometry_reference_m - measured_distance_m - datum_offset_m;
+    return true;
+}
+
+inline bool apply_distance_calibration_m(
+    float measured_distance_m,
+    float distance_scale,
+    float distance_offset_m,
+    float *out_corrected_distance_m
+) {
+    if (out_corrected_distance_m == nullptr || measured_distance_m < 0.0f || distance_scale <= 0.0f) {
+        return false;
+    }
+
+    const float corrected_m = (measured_distance_m * distance_scale) + distance_offset_m;
+    if (corrected_m < 0.0f) {
+        return false;
+    }
+
+    *out_corrected_distance_m = corrected_m;
+    return true;
+}
+
+inline bool distance_from_pulse_us(
+    unsigned long pulse_us,
+    float speed_of_sound_m_per_us,
+    float *out_distance_m
+) {
+    if (out_distance_m == nullptr || pulse_us == 0UL || speed_of_sound_m_per_us <= 0.0f) {
+        return false;
+    }
+
+    *out_distance_m = (static_cast<float>(pulse_us) * speed_of_sound_m_per_us) / 2.0f;
+    return true;
+}
+
+inline bool median_distance_m(const float *samples_m, std::size_t count, float *out_median_m) {
+    if (samples_m == nullptr || out_median_m == nullptr || count == 0 || count > 16) {
+        return false;
+    }
+
+    float sorted[16];
+    for (std::size_t i = 0; i < count; ++i) {
+        if (samples_m[i] < 0.0f) {
+            return false;
+        }
+        sorted[i] = samples_m[i];
+    }
+
+    for (std::size_t i = 1; i < count; ++i) {
+        const float v = sorted[i];
+        std::size_t j = i;
+        while (j > 0 && sorted[j - 1] > v) {
+            sorted[j] = sorted[j - 1];
+            --j;
+        }
+        sorted[j] = v;
+    }
+
+    *out_median_m = sorted[count / 2];
     return true;
 }
 

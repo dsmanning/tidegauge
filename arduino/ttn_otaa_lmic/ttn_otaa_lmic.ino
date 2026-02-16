@@ -12,20 +12,25 @@
 #  include "config.h"
 #endif
 #include "tide_math.h"
+#include "subband_fallback.h"
 
 static uint8_t APPEUI[8];
 static uint8_t DEVEUI[8];
 static uint8_t APPKEY[16];
 
 static osjob_t sendjob;
-static const unsigned TX_INTERVAL_S = 300;
+static const unsigned TX_INTERVAL_S = 60;
 static const unsigned RETRY_INTERVAL_S = 5;
+static const std::uint8_t JOIN_TXCOMPLETE_BEFORE_SUBBAND_ROTATE = 3;
+static tidegauge::SubbandFallback g_subband_fallback(tg_config::US915_SUBBAND);
 
 // HC-SR04 wiring (Adafruit Feather labels):
 // TRIG -> D6, ECHO -> D5
 static const int HCSR04_TRIG_PIN = D6;
 static const int HCSR04_ECHO_PIN = D5;
-static const unsigned long HCSR04_TIMEOUT_US = 30000UL;
+static const unsigned long HCSR04_TIMEOUT_US = tg_config::ULTRASONIC_TIMEOUT_US;
+static const std::size_t HCSR04_SAMPLE_COUNT = tg_config::ULTRASONIC_SAMPLE_COUNT;
+static const unsigned long HCSR04_INTERSAMPLE_DELAY_MS = tg_config::ULTRASONIC_INTERSAMPLE_DELAY_MS;
 static const int BATTERY_ADC_PIN = 29;
 static const float BATTERY_DIVIDER_RATIO = 2.0f;
 
@@ -79,6 +84,24 @@ static float read_battery_voltage_v() {
     return adc_v * BATTERY_DIVIDER_RATIO;
 }
 
+static void restart_join_on_next_subband() {
+    g_subband_fallback.rotate_to_next();
+    const std::uint8_t subband = g_subband_fallback.current_subband();
+    Serial.print("LMIC: switching to US915 subband ");
+    Serial.println(subband);
+    LMIC_reset();
+    LMIC_selectSubBand(subband);
+    LMIC_setClockError(MAX_CLOCK_ERROR * 1 / 100);
+    LMIC_startJoining();
+}
+
+static unsigned current_send_interval_s() {
+    if (tg_config::RAPID_DIAGNOSTIC_MODE) {
+        return static_cast<unsigned>(tg_config::RAPID_DIAGNOSTIC_INTERVAL_S);
+    }
+    return TX_INTERVAL_S;
+}
+
 static void do_send(osjob_t *j) {
     (void)j;
 
@@ -86,40 +109,101 @@ static void do_send(osjob_t *j) {
         Serial.println("LMIC: TX/RX pending");
         os_setTimedCallback(&sendjob, os_getTime() + sec2osticks(RETRY_INTERVAL_S), do_send);
     } else {
-        digitalWrite(HCSR04_TRIG_PIN, LOW);
-        delayMicroseconds(2);
-        digitalWrite(HCSR04_TRIG_PIN, HIGH);
-        delayMicroseconds(10);
-        digitalWrite(HCSR04_TRIG_PIN, LOW);
+        float measured_samples_m[HCSR04_SAMPLE_COUNT] = {0, 0, 0, 0, 0};
+        std::size_t valid_sample_count = 0;
+        for (std::size_t i = 0; i < HCSR04_SAMPLE_COUNT; ++i) {
+            digitalWrite(HCSR04_TRIG_PIN, LOW);
+            delayMicroseconds(2);
+            digitalWrite(HCSR04_TRIG_PIN, HIGH);
+            delayMicroseconds(10);
+            digitalWrite(HCSR04_TRIG_PIN, LOW);
 
-        const unsigned long pulse_us = pulseIn(HCSR04_ECHO_PIN, HIGH, HCSR04_TIMEOUT_US);
-        if (pulse_us == 0UL) {
+            const unsigned long pulse_us = pulseIn(HCSR04_ECHO_PIN, HIGH, HCSR04_TIMEOUT_US);
+            if (pulse_us > 0UL) {
+                float sample_m = 0.0f;
+                if (tidegauge::distance_from_pulse_us(pulse_us, tg_config::SPEED_OF_SOUND_M_PER_US, &sample_m)) {
+                    measured_samples_m[valid_sample_count++] = sample_m;
+                }
+            }
+            if (tg_config::RAPID_DIAGNOSTIC_MODE) {
+                Serial.print("DIAG: sample[");
+                Serial.print(static_cast<unsigned>(i));
+                Serial.print("] pulse_us=");
+                Serial.print(pulse_us);
+                if (pulse_us > 0UL) {
+                    Serial.print(" distance_m=");
+                    float sample_m = 0.0f;
+                    if (tidegauge::distance_from_pulse_us(pulse_us, tg_config::SPEED_OF_SOUND_M_PER_US, &sample_m)) {
+                        Serial.println(sample_m, 4);
+                    } else {
+                        Serial.println(" invalid");
+                    }
+                } else {
+                    Serial.println(" timeout");
+                }
+            }
+            if (i + 1 < HCSR04_SAMPLE_COUNT) {
+                delay(HCSR04_INTERSAMPLE_DELAY_MS);
+            }
+        }
+
+        if (valid_sample_count == 0) {
             Serial.println("SENSOR: timeout waiting for echo pulse");
-            os_setTimedCallback(&sendjob, os_getTime() + sec2osticks(TX_INTERVAL_S), do_send);
+            os_setTimedCallback(&sendjob, os_getTime() + sec2osticks(current_send_interval_s()), do_send);
             return;
         }
 
-        const float measured_distance_m = (static_cast<float>(pulse_us) * 0.000343f) / 2.0f;
+        float measured_distance_m = 0.0f;
+        if (!tidegauge::median_distance_m(measured_samples_m, valid_sample_count, &measured_distance_m)) {
+            Serial.println("SENSOR: invalid median distance sample set");
+            os_setTimedCallback(&sendjob, os_getTime() + sec2osticks(current_send_interval_s()), do_send);
+            return;
+        }
+        float corrected_distance_m = 0.0f;
+        if (!tidegauge::apply_distance_calibration_m(
+                measured_distance_m,
+                tg_config::DISTANCE_SCALE,
+                tg_config::DISTANCE_OFFSET_M,
+                &corrected_distance_m)) {
+            Serial.println("SENSOR: invalid distance calibration");
+            os_setTimedCallback(&sendjob, os_getTime() + sec2osticks(current_send_interval_s()), do_send);
+            return;
+        }
         const float battery_voltage_v = read_battery_voltage_v();
         float tide_height_m = 0.0f;
         if (!tidegauge::compute_tide_height_m(
-                tg_config::GEOMETRY_REFERENCE_M, measured_distance_m, tg_config::DATUM_OFFSET_M, &tide_height_m)) {
+                tg_config::GEOMETRY_REFERENCE_M, corrected_distance_m, tg_config::DATUM_OFFSET_M, &tide_height_m)) {
             Serial.println("SENSOR: invalid tide height input");
-            os_setTimedCallback(&sendjob, os_getTime() + sec2osticks(TX_INTERVAL_S), do_send);
+            os_setTimedCallback(&sendjob, os_getTime() + sec2osticks(current_send_interval_s()), do_send);
             return;
         }
 
         uint8_t payload[6] = {0, 0, 0, 0, 0, 0};
         if (!tidegauge::encode_tide_distance_battery_payload(
-                tide_height_m, measured_distance_m, battery_voltage_v, payload)) {
+                tide_height_m, corrected_distance_m, battery_voltage_v, payload)) {
             Serial.println("PAYLOAD: tide/distance/battery out of encodable range");
-            os_setTimedCallback(&sendjob, os_getTime() + sec2osticks(TX_INTERVAL_S), do_send);
+            os_setTimedCallback(&sendjob, os_getTime() + sec2osticks(current_send_interval_s()), do_send);
+            return;
+        }
+
+        if (tg_config::RAPID_DIAGNOSTIC_MODE) {
+            Serial.print("DIAG: median_distance_m=");
+            Serial.print(measured_distance_m, 4);
+            Serial.print(" corrected_distance_m=");
+            Serial.print(corrected_distance_m, 4);
+            Serial.print(" tide_height_m=");
+            Serial.print(tide_height_m, 4);
+            Serial.print(" battery_v=");
+            Serial.println(battery_voltage_v, 4);
+            os_setTimedCallback(&sendjob, os_getTime() + sec2osticks(current_send_interval_s()), do_send);
             return;
         }
 
         LMIC_setTxData2(1, payload, sizeof(payload), 0);
-        Serial.print("LMIC: queued uplink distance_m=");
+        Serial.print("LMIC: queued uplink raw_distance_m=");
         Serial.print(measured_distance_m, 3);
+        Serial.print(" corrected_distance_m=");
+        Serial.print(corrected_distance_m, 3);
         Serial.print(" tide_height_m=");
         Serial.print(tide_height_m, 3);
         Serial.print(" battery_v=");
@@ -149,11 +233,13 @@ void onEvent(ev_t ev) {
             break;
         case EV_JOINED:
             Serial.println("EV_JOINED");
+            g_subband_fallback.note_joined();
             LMIC_setLinkCheckMode(0);
             do_send(&sendjob);
             break;
         case EV_JOIN_FAILED:
             Serial.println("EV_JOIN_FAILED");
+            restart_join_on_next_subband();
             break;
         case EV_TXCOMPLETE:
             Serial.println("EV_TXCOMPLETE");
@@ -161,7 +247,13 @@ void onEvent(ev_t ev) {
                 Serial.print("LMIC: downlink bytes=");
                 Serial.println(LMIC.dataLen);
             }
-            os_setTimedCallback(&sendjob, os_getTime() + sec2osticks(TX_INTERVAL_S), do_send);
+            os_setTimedCallback(&sendjob, os_getTime() + sec2osticks(current_send_interval_s()), do_send);
+            break;
+        case EV_JOIN_TXCOMPLETE:
+            Serial.println("EV_JOIN_TXCOMPLETE");
+            if (g_subband_fallback.note_join_txcomplete(JOIN_TXCOMPLETE_BEFORE_SUBBAND_ROTATE)) {
+                restart_join_on_next_subband();
+            }
             break;
         default:
             Serial.print("EV_");
@@ -176,6 +268,8 @@ void setup() {
     }
 
     Serial.println("LMIC OTAA test starting");
+    Serial.print("CFG: rapid_diag=");
+    Serial.println(tg_config::RAPID_DIAGNOSTIC_MODE ? 1 : 0);
 
     if (!hex_to_bytes(tg_config::APP_EUI_HEX, APPEUI, sizeof(APPEUI)) ||
         !hex_to_bytes(tg_config::DEV_EUI_HEX, DEVEUI, sizeof(DEVEUI)) ||
@@ -197,7 +291,10 @@ void setup() {
     os_init();
     LMIC_reset();
 
-    LMIC_selectSubBand(tg_config::US915_SUBBAND);
+    const std::uint8_t initial_subband = g_subband_fallback.current_subband();
+    Serial.print("LMIC: initial US915 subband ");
+    Serial.println(initial_subband);
+    LMIC_selectSubBand(initial_subband);
     LMIC_setClockError(MAX_CLOCK_ERROR * 1 / 100);
 
     LMIC_startJoining();

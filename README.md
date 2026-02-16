@@ -133,8 +133,14 @@ HC-SR04 pinout (Feather labels):
 
 Firmware calibration constants are in `arduino/ttn_otaa_lmic/config.h`:
 
+- `DISTANCE_SCALE`
+- `DISTANCE_OFFSET_M`
 - `GEOMETRY_REFERENCE_M`
 - `DATUM_OFFSET_M`
 
 Conversion formula:
-`tide_height_m = geometry_reference_m - measured_distance_m - datum_offset_m`
+`corrected_distance_m = measured_distance_m * distance_scale + distance_offset_m`
+`tide_height_m = geometry_reference_m - corrected_distance_m - datum_offset_m`
+
+Important electrical note:
+`HC-SR04 ECHO` is a 5V signal and must be level-shifted (or resistor-divided) before feeding RP2040 `D5` (3.3V-only input).
