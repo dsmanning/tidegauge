@@ -1,0 +1,169 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="1050" viewBox="0 0 1700 1050">
+  <style>
+    .title { font: 700 30px sans-serif; fill: #14202b; }
+    .subtitle { font: 400 16px sans-serif; fill: #475467; }
+    .module { fill: #fffefb; stroke: #14202b; stroke-width: 2.5; }
+    .label { font: 700 18px sans-serif; fill: #14202b; }
+    .pin { font: 700 15px monospace; fill: #14202b; }
+    .net { font: 700 13px monospace; fill: #344054; }
+    .note { font: 500 14px sans-serif; fill: #344054; }
+    .wire { stroke: #14202b; stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .junction-dot { fill: #14202b; }
+    .resistor-symbol { stroke: #14202b; stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .transistor-npn { stroke: #14202b; stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .wire-jump { stroke: #14202b; stroke-width: 3; fill: none; }
+    .ground { stroke: #14202b; stroke-width: 3; fill: none; stroke-linecap: round; }
+  </style>
+
+  <text x="40" y="48" class="title">Remote Tide Gauge Circuit Diagram</text>
+  <text x="40" y="74" class="subtitle">Each Feather signal pin has its own labeled net. Only 3.3V and GND are shared rails.</text>
+
+  <rect x="40" y="130" width="360" height="540" class="module"/>
+  <text x="65" y="166" class="label">Adafruit Feather RP2040 RFM</text>
+  <text x="70" y="220" class="pin">3V3</text>
+  <text x="70" y="270" class="pin">GND</text>
+  <text x="70" y="340" class="pin">D5 / ECHO</text>
+  <text x="70" y="410" class="pin">D6 / TRIG</text>
+  <text x="70" y="480" class="pin">D9 / DS18B20 DATA</text>
+  <text x="70" y="550" class="pin">D10 / SENSOR PWR EN</text>
+  <text x="70" y="620" class="pin">A0 / BAT ADC</text>
+  <text x="70" y="690" class="pin">BAT</text>
+
+  <rect x="1320" y="120" width="230" height="200" class="module"/>
+  <text x="1395" y="156" class="label">HC-SR04</text>
+  <text x="1350" y="210" class="pin">VCC</text>
+  <text x="1350" y="250" class="pin">TRIG</text>
+  <text x="1350" y="290" class="pin">ECHO</text>
+  <text x="1350" y="330" class="pin">GND</text>
+
+  <rect x="1320" y="420" width="230" height="170" class="module"/>
+  <text x="1390" y="456" class="label">DS18B20</text>
+  <text x="1350" y="510" class="pin">VDD</text>
+  <text x="1350" y="550" class="pin">DQ</text>
+  <text x="1350" y="590" class="pin">GND</text>
+
+  <text x="870" y="160" class="label">BC548</text>
+  <circle cx="940" cy="270" r="48" class="transistor-npn"/>
+  <line x1="892" y1="270" x2="820" y2="270" class="transistor-npn"/>
+  <line x1="915" y1="245" x2="970" y2="195" class="transistor-npn"/>
+  <line x1="915" y1="295" x2="970" y2="345" class="transistor-npn"/>
+  <line x1="970" y1="195" x2="970" y2="150" class="transistor-npn"/>
+  <line x1="970" y1="345" x2="970" y2="390" class="transistor-npn"/>
+  <line x1="958" y1="335" x2="970" y2="345" class="transistor-npn"/>
+  <line x1="954" y1="321" x2="970" y2="345" class="transistor-npn"/>
+  <text x="780" y="264" class="pin">Base</text>
+  <text x="985" y="152" class="pin">Collector</text>
+  <text x="985" y="392" class="pin">Emitter</text>
+
+  <text x="650" y="470" class="label">Base Network</text>
+  <path d="M 650 530 L 670 530 L 680 520 L 690 540 L 700 520 L 710 540 L 720 520 L 730 540 L 740 530 L 760 530" class="resistor-symbol"/>
+  <text x="674" y="510" class="note">1k</text>
+  <path d="M 860 530 L 880 530 L 890 520 L 900 540 L 910 520 L 920 540 L 930 520 L 940 540 L 950 530 L 970 530" class="resistor-symbol"/>
+  <text x="884" y="510" class="note">10k</text>
+
+  <text x="650" y="700" class="label">Battery Divider</text>
+  <path d="M 650 760 L 670 760 L 680 750 L 690 770 L 700 750 L 710 770 L 720 750 L 730 770 L 740 760 L 760 760" class="resistor-symbol"/>
+  <text x="670" y="740" class="note">100k</text>
+  <path d="M 900 760 L 920 760 L 930 750 L 940 770 L 950 750 L 960 770 L 970 750 L 980 770 L 990 760 L 1010 760" class="resistor-symbol"/>
+  <text x="920" y="740" class="note">219k</text>
+
+  <line x1="190" y1="210" x2="190" y2="90" class="wire"/>
+  <line x1="190" y1="90" x2="1490" y2="90" class="wire"/>
+  <text x="205" y="82" class="note">3.3V rail</text>
+
+  <line x1="190" y1="260" x2="190" y2="930" class="wire"/>
+  <line x1="190" y1="930" x2="1490" y2="930" class="wire"/>
+  <text x="205" y="950" class="note">0V / GND rail</text>
+
+  <line x1="160" y1="210" x2="260" y2="210" class="wire"/>
+  <line x1="260" y1="210" x2="260" y2="90" class="wire"/>
+  <circle cx="260" cy="90" r="5" class="junction-dot"/>
+
+  <line x1="160" y1="260" x2="260" y2="260" class="wire"/>
+  <line x1="260" y1="260" x2="260" y2="930" class="wire"/>
+  <circle cx="260" cy="930" r="5" class="junction-dot"/>
+
+  <line x1="160" y1="340" x2="330" y2="340" class="wire"/>
+  <text x="345" y="332" class="net">NET_ECHO</text>
+  <line x1="330" y1="340" x2="1200" y2="340" class="wire"/>
+  <line x1="1200" y1="340" x2="1200" y2="290" class="wire"/>
+  <line x1="1200" y1="290" x2="1350" y2="290" class="wire"/>
+
+  <line x1="160" y1="410" x2="330" y2="410" class="wire"/>
+  <text x="345" y="402" class="net">NET_TRIG</text>
+  <line x1="330" y1="410" x2="1170" y2="410" class="wire"/>
+  <line x1="1170" y1="410" x2="1170" y2="250" class="wire"/>
+  <line x1="1170" y1="250" x2="1350" y2="250" class="wire"/>
+
+  <line x1="160" y1="480" x2="330" y2="480" class="wire"/>
+  <text x="345" y="472" class="net">NET_1WIRE</text>
+  <line x1="330" y1="480" x2="1140" y2="480" class="wire"/>
+  <line x1="1140" y1="480" x2="1140" y2="550" class="wire"/>
+  <line x1="1140" y1="550" x2="1350" y2="550" class="wire"/>
+
+  <line x1="160" y1="550" x2="330" y2="550" class="wire"/>
+  <text x="345" y="542" class="net">NET_PWR_EN</text>
+  <line x1="330" y1="550" x2="650" y2="550" class="wire"/>
+  <line x1="650" y1="550" x2="650" y2="530" class="wire"/>
+
+  <line x1="760" y1="530" x2="820" y2="530" class="wire"/>
+  <line x1="820" y1="530" x2="820" y2="270" class="wire"/>
+  <line x1="820" y1="270" x2="892" y2="270" class="wire"/>
+  <circle cx="820" cy="270" r="5" class="junction-dot"/>
+
+  <line x1="820" y1="270" x2="820" y2="430" class="wire"/>
+  <line x1="820" y1="430" x2="860" y2="430" class="wire"/>
+  <line x1="860" y1="430" x2="860" y2="530" class="wire"/>
+  <line x1="970" y1="530" x2="1010" y2="530" class="wire"/>
+  <line x1="1010" y1="530" x2="1010" y2="930" class="wire"/>
+  <circle cx="1010" cy="930" r="5" class="junction-dot"/>
+
+  <line x1="970" y1="150" x2="970" y2="330" class="wire"/>
+  <line x1="970" y1="330" x2="1350" y2="330" class="wire"/>
+  <circle cx="1350" cy="330" r="5" class="junction-dot"/>
+
+  <line x1="970" y1="390" x2="970" y2="930" class="wire"/>
+  <circle cx="970" cy="930" r="5" class="junction-dot"/>
+
+  <line x1="160" y1="620" x2="330" y2="620" class="wire"/>
+  <text x="345" y="612" class="net">NET_BAT_SENSE</text>
+  <line x1="330" y1="620" x2="850" y2="620" class="wire"/>
+  <line x1="850" y1="620" x2="850" y2="760" class="wire"/>
+
+  <line x1="160" y1="690" x2="330" y2="690" class="wire"/>
+  <text x="345" y="682" class="net">NET_BAT</text>
+  <line x1="330" y1="690" x2="650" y2="690" class="wire"/>
+  <line x1="650" y1="690" x2="650" y2="760" class="wire"/>
+
+  <line x1="760" y1="760" x2="850" y2="760" class="wire"/>
+  <circle cx="850" cy="760" r="5" class="junction-dot"/>
+  <line x1="850" y1="760" x2="900" y2="760" class="wire"/>
+  <line x1="1010" y1="760" x2="1010" y2="930" class="wire"/>
+
+  <line x1="190" y1="90" x2="1320" y2="90" class="wire"/>
+  <line x1="1320" y1="90" x2="1320" y2="210" class="wire"/>
+  <line x1="1320" y1="210" x2="1350" y2="210" class="wire"/>
+  <circle cx="1320" cy="90" r="5" class="junction-dot"/>
+
+  <line x1="190" y1="90" x2="1290" y2="90" class="wire"/>
+  <line x1="1290" y1="90" x2="1290" y2="510" class="wire"/>
+  <line x1="1290" y1="510" x2="1350" y2="510" class="wire"/>
+  <circle cx="1290" cy="90" r="5" class="junction-dot"/>
+
+  <line x1="190" y1="930" x2="1320" y2="930" class="wire"/>
+  <line x1="1320" y1="930" x2="1320" y2="590" class="wire"/>
+  <line x1="1320" y1="590" x2="1350" y2="590" class="wire"/>
+  <circle cx="1320" cy="930" r="5" class="junction-dot"/>
+
+  <path d="M 470 480 L 530 480" class="wire"/>
+  <path d="M 500 440 L 500 520" class="wire"/>
+  <path d="M 485 480 C 493 460, 507 460, 515 480" class="wire-jump"/>
+
+  <line x1="970" y1="930" x2="970" y2="955" class="ground"/>
+  <line x1="954" y1="955" x2="986" y2="955" class="ground"/>
+  <line x1="958" y1="965" x2="982" y2="965" class="ground"/>
+  <line x1="962" y1="975" x2="978" y2="975" class="ground"/>
+
+  <text x="1080" y="500" class="note">4.7k pull-up from NET_1WIRE to 3.3V</text>
+  <text x="40" y="1010" class="note">Only 3.3V and GND are common rails. Every other Feather pin now has its own labeled net so the connections are unambiguous.</text>
+</svg>
