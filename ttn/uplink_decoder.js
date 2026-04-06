@@ -1,22 +1,55 @@
 function decodeUplink(input) {
-  if (!input.bytes || input.bytes.length < 6) {
-    return { errors: ["Need 6-byte payload"] };
+  const bytes = input.bytes || [];
+  if (bytes.length !== 10) {
+    return { errors: [`Expected 10-byte payload, got ${bytes.length}`] };
   }
 
-  let tide_mm = (input.bytes[0] << 8) | input.bytes[1];
-  if (tide_mm & 0x8000) tide_mm -= 0x10000;
+  function readInt16BE(msb, lsb) {
+    let value = (msb << 8) | lsb;
+    if (value & 0x8000) {
+      value -= 0x10000;
+    }
+    return value;
+  }
 
-  const raw_distance_mm = (input.bytes[2] << 8) | input.bytes[3];
-  const battery_mv = (input.bytes[4] << 8) | input.bytes[5];
+  function readUInt16BE(msb, lsb) {
+    return (msb << 8) | lsb;
+  }
+
+  function decodeSignedWithInvalid(msb, lsb, scale) {
+    const raw = readInt16BE(msb, lsb);
+    if (raw === -32768) {
+      return { raw: null, scaled: null };
+    }
+    return { raw, scaled: raw / scale };
+  }
+
+  function decodeUnsignedWithInvalid(msb, lsb, scale) {
+    const raw = readUInt16BE(msb, lsb);
+    if (raw === 0xffff) {
+      return { raw: null, scaled: null };
+    }
+    return { raw, scaled: raw / scale };
+  }
+
+  const tide = decodeSignedWithInvalid(bytes[0], bytes[1], 1000);
+  const distance = decodeUnsignedWithInvalid(bytes[2], bytes[3], 1000);
+  const batteryMv = readUInt16BE(bytes[4], bytes[5]);
+  const stddev = decodeUnsignedWithInvalid(bytes[6], bytes[7], 1000);
+  const temperature = decodeSignedWithInvalid(bytes[8], bytes[9], 100);
 
   return {
     data: {
-      tide_height_mm: tide_mm,
-      tide_height_m: tide_mm / 1000,
-      raw_distance_mm,
-      raw_distance_m: raw_distance_mm / 1000,
-      battery_mv,
-      battery_v: battery_mv / 1000
+      tide_height_mm: tide.raw,
+      tide_height_m: tide.scaled,
+      raw_distance_mm: distance.raw,
+      raw_distance_m: distance.scaled,
+      battery_mv: batteryMv,
+      battery_v: batteryMv / 1000,
+      distance_stddev_mm: stddev.raw,
+      distance_stddev_m: stddev.scaled,
+      temperature_centi_c: temperature.raw,
+      temperature_c: temperature.scaled,
     }
   };
 }

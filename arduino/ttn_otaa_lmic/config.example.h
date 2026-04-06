@@ -11,11 +11,18 @@ inline constexpr char DEV_EUI_HEX[] = "0000000000000000";
 inline constexpr char APP_EUI_HEX[] = "0000000000000000";
 inline constexpr char APP_KEY_HEX[] = "00000000000000000000000000000000";
 inline constexpr std::uint8_t US915_SUBBAND = 2;
+inline constexpr bool LORA_ADR_ENABLED = true;
+inline constexpr std::int8_t LORA_UPLINK_TX_POWER_DBM = 10;
 inline constexpr bool RAPID_DIAGNOSTIC_MODE = false;
 inline constexpr std::uint32_t RAPID_DIAGNOSTIC_INTERVAL_S = 5;
-inline constexpr std::size_t ULTRASONIC_SAMPLE_COUNT = 10;
+inline constexpr std::size_t ULTRASONIC_SAMPLE_COUNT = 64;
+inline constexpr int ULTRASONIC_POWER_ENABLE_PIN = -1;
+inline constexpr std::uint32_t ULTRASONIC_POWER_SETTLE_MS = 2000;
 inline constexpr std::uint32_t ULTRASONIC_INTERSAMPLE_DELAY_MS = 40;
 inline constexpr std::uint32_t ULTRASONIC_TIMEOUT_US = 45000;
+inline constexpr int DS18B20_DATA_PIN = 9;
+inline constexpr std::uint8_t DS18B20_RESOLUTION_BITS = 10;
+inline constexpr std::uint32_t IDLE_LOOP_SLEEP_MS = 5;
 inline constexpr float SPEED_OF_SOUND_M_PER_US = 0.000343f;
 
 // Site calibration constants:

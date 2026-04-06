@@ -1,5 +1,8 @@
 #include <Arduino.h>
 #include <SPI.h>
+#include <pico/time.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
 #include <lmic.h>
 #include <hal/hal.h>
 #if defined(__has_include)
@@ -30,9 +33,39 @@ static const int HCSR04_TRIG_PIN = D6;
 static const int HCSR04_ECHO_PIN = D5;
 static const unsigned long HCSR04_TIMEOUT_US = tg_config::ULTRASONIC_TIMEOUT_US;
 static const std::size_t HCSR04_SAMPLE_COUNT = tg_config::ULTRASONIC_SAMPLE_COUNT;
+static const int HCSR04_POWER_ENABLE_PIN = tg_config::ULTRASONIC_POWER_ENABLE_PIN;
 static const unsigned long HCSR04_INTERSAMPLE_DELAY_MS = tg_config::ULTRASONIC_INTERSAMPLE_DELAY_MS;
-static const int BATTERY_ADC_PIN = 29;
-static const float BATTERY_DIVIDER_RATIO = 2.0f;
+static constexpr float HCSR04_CLUSTER_GAP_THRESHOLD_M = 0.15f;
+static constexpr std::size_t HCSR04_MIN_CLUSTER_COUNT = 3;
+static const int BATTERY_ADC_PIN = 26;
+static const float BATTERY_DIVIDER_RATIO = 1.545f;
+static const int DS18B20_DATA_PIN = tg_config::DS18B20_DATA_PIN;
+
+static OneWire g_one_wire(DS18B20_DATA_PIN);
+static DallasTemperature g_temperature_sensors(&g_one_wire);
+
+static void print_ds18b20_address(const DeviceAddress address) {
+    for (std::uint8_t i = 0; i < 8; ++i) {
+        if (address[i] < 0x10) {
+            Serial.print("0");
+        }
+        Serial.print(address[i], HEX);
+    }
+}
+
+static void log_ds18b20_bus_state() {
+    Serial.print("DS18B20: device_count=");
+    Serial.print(g_temperature_sensors.getDeviceCount());
+
+    DeviceAddress address = {0, 0, 0, 0, 0, 0, 0, 0};
+    if (g_temperature_sensors.getAddress(address, 0)) {
+        Serial.print(" DS18B20: address=");
+        print_ds18b20_address(address);
+    } else {
+        Serial.print(" DS18B20: address=none");
+    }
+    Serial.println();
+}
 
 void os_getArtEui(u1_t *buf) { memcpy(buf, APPEUI, 8); }
 void os_getDevEui(u1_t *buf) { memcpy(buf, DEVEUI, 8); }
@@ -80,8 +113,16 @@ static void reverse_bytes(uint8_t *buf, size_t len) {
 
 static float read_battery_voltage_v() {
     const int raw = analogRead(BATTERY_ADC_PIN);
-    const float adc_v = (static_cast<float>(raw) * 3.3f) / 4095.0f;
-    return adc_v * BATTERY_DIVIDER_RATIO;
+    float battery_v = 0.0f;
+    if (!tidegauge::battery_voltage_from_adc_raw(raw, 3.3f, 4095, BATTERY_DIVIDER_RATIO, &battery_v)) {
+        return 0.0f;
+    }
+    return battery_v;
+}
+
+static void configure_low_power_lora_uplink() {
+    LMIC_setAdrMode(tg_config::LORA_ADR_ENABLED ? 1 : 0);
+    LMIC_setDrTxpow(LMIC.datarate, tg_config::LORA_UPLINK_TX_POWER_DBM);
 }
 
 static void restart_join_on_next_subband() {
@@ -102,6 +143,19 @@ static unsigned current_send_interval_s() {
     return TX_INTERVAL_S;
 }
 
+static void power_on_ultrasonic_sensor() {
+    if (HCSR04_POWER_ENABLE_PIN >= 0) {
+        digitalWrite(HCSR04_POWER_ENABLE_PIN, HIGH);
+        delay(tg_config::ULTRASONIC_POWER_SETTLE_MS);
+    }
+}
+
+static void power_off_ultrasonic_sensor() {
+    if (HCSR04_POWER_ENABLE_PIN >= 0) {
+        digitalWrite(HCSR04_POWER_ENABLE_PIN, LOW);
+    }
+}
+
 static void do_send(osjob_t *j) {
     (void)j;
 
@@ -109,21 +163,37 @@ static void do_send(osjob_t *j) {
         Serial.println("LMIC: TX/RX pending");
         os_setTimedCallback(&sendjob, os_getTime() + sec2osticks(RETRY_INTERVAL_S), do_send);
     } else {
-        float measured_samples_m[HCSR04_SAMPLE_COUNT] = {0, 0, 0, 0, 0};
+        power_on_ultrasonic_sensor();
+        float measured_samples_m[HCSR04_SAMPLE_COUNT] = {};
         std::size_t valid_sample_count = 0;
+        std::size_t timeout_sample_count = 0;
+        std::size_t echo_high_stuck_count = 0;
+        unsigned long min_valid_pulse_us = 0UL;
+        unsigned long max_valid_pulse_us = 0UL;
         for (std::size_t i = 0; i < HCSR04_SAMPLE_COUNT; ++i) {
+            if (digitalRead(HCSR04_ECHO_PIN) == HIGH) {
+                ++echo_high_stuck_count;
+            }
             digitalWrite(HCSR04_TRIG_PIN, LOW);
             delayMicroseconds(2);
             digitalWrite(HCSR04_TRIG_PIN, HIGH);
-            delayMicroseconds(10);
+            delayMicroseconds(20);
             digitalWrite(HCSR04_TRIG_PIN, LOW);
 
             const unsigned long pulse_us = pulseIn(HCSR04_ECHO_PIN, HIGH, HCSR04_TIMEOUT_US);
             if (pulse_us > 0UL) {
+                if (min_valid_pulse_us == 0UL || pulse_us < min_valid_pulse_us) {
+                    min_valid_pulse_us = pulse_us;
+                }
+                if (pulse_us > max_valid_pulse_us) {
+                    max_valid_pulse_us = pulse_us;
+                }
                 float sample_m = 0.0f;
                 if (tidegauge::distance_from_pulse_us(pulse_us, tg_config::SPEED_OF_SOUND_M_PER_US, &sample_m)) {
                     measured_samples_m[valid_sample_count++] = sample_m;
                 }
+            } else {
+                ++timeout_sample_count;
             }
             if (tg_config::RAPID_DIAGNOSTIC_MODE) {
                 Serial.print("DIAG: sample[");
@@ -146,51 +216,84 @@ static void do_send(osjob_t *j) {
                 delay(HCSR04_INTERSAMPLE_DELAY_MS);
             }
         }
+        if (tg_config::RAPID_DIAGNOSTIC_MODE) {
+            Serial.print("DIAG: samples_valid=");
+            Serial.print(static_cast<unsigned>(valid_sample_count));
+            Serial.print(" samples_timeout=");
+            Serial.print(static_cast<unsigned>(timeout_sample_count));
+            Serial.print(" pulse_min_us=");
+            Serial.print(min_valid_pulse_us);
+            Serial.print(" pulse_max_us=");
+            Serial.print(max_valid_pulse_us);
+            Serial.print(" echo_high_stuck=");
+            Serial.println(echo_high_stuck_count > 0 ? 1 : 0);
+        }
+
+        float measured_distance_m = NAN;
+        float measured_distance_stddev_m = NAN;
+        float corrected_distance_m = NAN;
+        float corrected_distance_stddev_m = NAN;
+        float tide_height_m = NAN;
 
         if (valid_sample_count == 0) {
             Serial.println("SENSOR: timeout waiting for echo pulse");
-            os_setTimedCallback(&sendjob, os_getTime() + sec2osticks(current_send_interval_s()), do_send);
-            return;
-        }
-
-        float measured_distance_m = 0.0f;
-        if (!tidegauge::median_distance_m(measured_samples_m, valid_sample_count, &measured_distance_m)) {
-            Serial.println("SENSOR: invalid median distance sample set");
-            os_setTimedCallback(&sendjob, os_getTime() + sec2osticks(current_send_interval_s()), do_send);
-            return;
-        }
-        float corrected_distance_m = 0.0f;
-        if (!tidegauge::apply_distance_calibration_m(
-                measured_distance_m,
-                tg_config::DISTANCE_SCALE,
-                tg_config::DISTANCE_OFFSET_M,
-                &corrected_distance_m)) {
+        } else if (!tidegauge::furthest_cluster_distance_stats_m(
+                       measured_samples_m,
+                       valid_sample_count,
+                       HCSR04_CLUSTER_GAP_THRESHOLD_M,
+                       HCSR04_MIN_CLUSTER_COUNT,
+                       &measured_distance_m,
+                       &measured_distance_stddev_m)) {
+            Serial.println("SENSOR: invalid furthest distance cluster sample set");
+        } else if (!tidegauge::apply_distance_calibration_m(
+                       measured_distance_m,
+                       tg_config::DISTANCE_SCALE,
+                       tg_config::DISTANCE_OFFSET_M,
+                       &corrected_distance_m)) {
             Serial.println("SENSOR: invalid distance calibration");
-            os_setTimedCallback(&sendjob, os_getTime() + sec2osticks(current_send_interval_s()), do_send);
-            return;
+        } else {
+            corrected_distance_stddev_m = measured_distance_stddev_m * tg_config::DISTANCE_SCALE;
+            if (!tidegauge::compute_tide_height_m(
+                    tg_config::GEOMETRY_REFERENCE_M, corrected_distance_m, tg_config::DATUM_OFFSET_M, &tide_height_m)) {
+                Serial.println("SENSOR: invalid tide height input");
+                corrected_distance_m = NAN;
+                corrected_distance_stddev_m = NAN;
+                tide_height_m = NAN;
+            }
         }
         const float battery_voltage_v = read_battery_voltage_v();
-        float tide_height_m = 0.0f;
-        if (!tidegauge::compute_tide_height_m(
-                tg_config::GEOMETRY_REFERENCE_M, corrected_distance_m, tg_config::DATUM_OFFSET_M, &tide_height_m)) {
-            Serial.println("SENSOR: invalid tide height input");
-            os_setTimedCallback(&sendjob, os_getTime() + sec2osticks(current_send_interval_s()), do_send);
-            return;
+        log_ds18b20_bus_state();
+        g_temperature_sensors.requestTemperatures();
+        float temperature_c = g_temperature_sensors.getTempCByIndex(0);
+        if (temperature_c == DEVICE_DISCONNECTED_C) {
+            Serial.println("SENSOR: DS18B20 disconnected");
+            temperature_c = NAN;
         }
 
-        uint8_t payload[6] = {0, 0, 0, 0, 0, 0};
+        uint8_t payload[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
         if (!tidegauge::encode_tide_distance_battery_payload(
-                tide_height_m, corrected_distance_m, battery_voltage_v, payload)) {
-            Serial.println("PAYLOAD: tide/distance/battery out of encodable range");
+                tide_height_m,
+                corrected_distance_m,
+                battery_voltage_v,
+                corrected_distance_stddev_m,
+                temperature_c,
+                payload)) {
+            power_off_ultrasonic_sensor();
+            Serial.println("PAYLOAD: tide/distance/battery/stddev/temperature out of encodable range");
             os_setTimedCallback(&sendjob, os_getTime() + sec2osticks(current_send_interval_s()), do_send);
             return;
         }
 
         if (tg_config::RAPID_DIAGNOSTIC_MODE) {
+            power_off_ultrasonic_sensor();
             Serial.print("DIAG: median_distance_m=");
             Serial.print(measured_distance_m, 4);
             Serial.print(" corrected_distance_m=");
             Serial.print(corrected_distance_m, 4);
+            Serial.print(" corrected_stddev_m=");
+            Serial.print(corrected_distance_stddev_m, 4);
+            Serial.print(" temperature_c=");
+            Serial.print(temperature_c, 2);
             Serial.print(" tide_height_m=");
             Serial.print(tide_height_m, 4);
             Serial.print(" battery_v=");
@@ -199,11 +302,17 @@ static void do_send(osjob_t *j) {
             return;
         }
 
+        power_off_ultrasonic_sensor();
+        configure_low_power_lora_uplink();
         LMIC_setTxData2(1, payload, sizeof(payload), 0);
         Serial.print("LMIC: queued uplink raw_distance_m=");
         Serial.print(measured_distance_m, 3);
         Serial.print(" corrected_distance_m=");
         Serial.print(corrected_distance_m, 3);
+        Serial.print(" corrected_stddev_m=");
+        Serial.print(corrected_distance_stddev_m, 3);
+        Serial.print(" temperature_c=");
+        Serial.print(temperature_c, 2);
         Serial.print(" tide_height_m=");
         Serial.print(tide_height_m, 3);
         Serial.print(" battery_v=");
@@ -219,7 +328,15 @@ static void do_send(osjob_t *j) {
         Serial.print(" ");
         Serial.print(payload[4], HEX);
         Serial.print(" ");
-        Serial.println(payload[5], HEX);
+        Serial.print(payload[5], HEX);
+        Serial.print(" ");
+        Serial.print(payload[6], HEX);
+        Serial.print(" ");
+        Serial.print(payload[7], HEX);
+        Serial.print(" ");
+        Serial.print(payload[8], HEX);
+        Serial.print(" ");
+        Serial.println(payload[9], HEX);
     }
 }
 
@@ -234,6 +351,7 @@ void onEvent(ev_t ev) {
         case EV_JOINED:
             Serial.println("EV_JOINED");
             g_subband_fallback.note_joined();
+            configure_low_power_lora_uplink();
             LMIC_setLinkCheckMode(0);
             do_send(&sendjob);
             break;
@@ -285,11 +403,24 @@ void setup() {
 
     pinMode(HCSR04_TRIG_PIN, OUTPUT);
     pinMode(HCSR04_ECHO_PIN, INPUT);
+    if (HCSR04_POWER_ENABLE_PIN >= 0) {
+        pinMode(HCSR04_POWER_ENABLE_PIN, OUTPUT);
+        power_off_ultrasonic_sensor();
+    }
     digitalWrite(HCSR04_TRIG_PIN, LOW);
     analogReadResolution(12);
+    g_temperature_sensors.begin();
+    g_temperature_sensors.setResolution(tg_config::DS18B20_RESOLUTION_BITS);
+    log_ds18b20_bus_state();
 
     os_init();
     LMIC_reset();
+
+    if (tg_config::RAPID_DIAGNOSTIC_MODE) {
+        Serial.println("DIAG: skipping LoRa join");
+        do_send(&sendjob);
+        return;
+    }
 
     const std::uint8_t initial_subband = g_subband_fallback.current_subband();
     Serial.print("LMIC: initial US915 subband ");
@@ -302,4 +433,5 @@ void setup() {
 
 void loop() {
     os_runloop_once();
+    sleep_ms(tg_config::IDLE_LOOP_SLEEP_MS);
 }
