@@ -116,11 +116,36 @@ These are parsed at startup; invalid hex length/content aborts boot with a seria
 
 Use `ttn/uplink_decoder.js` as the TTN JavaScript uplink payload formatter.
 
-Current uplink payload format is 6 bytes:
+Current uplink payload format is 10 bytes:
 
 - Bytes `0-1`: `tide_height_mm` (signed int16, big-endian)
 - Bytes `2-3`: `raw_distance_mm` (unsigned uint16, big-endian)
 - Bytes `4-5`: `battery_mv` (unsigned uint16, big-endian)
+- Bytes `6-7`: `distance_stddev_mm` (unsigned uint16, big-endian)
+- Bytes `8-9`: `temperature_centi_c` (signed int16, big-endian)
+
+Invalid optional measurements use sentinel values so one failed sensor reading
+does not block the whole uplink:
+
+- signed invalid sentinel: `0x8000`
+- unsigned invalid sentinel: `0xFFFF`
+
+## Home Assistant Filtering
+
+The optional Home Assistant configuration in `homeassistant/tide_gauge_filter.yaml`
+adds a post-TTN filtering pipeline for the decoded tide-height sensor.
+
+Its purpose is to clean occasional ultrasonic outliers while preserving the slow
+water-level trend:
+
+1. hold the last valid numeric reading
+2. compute a 10-minute rolling median
+3. reject remaining outlier values outside recent history
+4. apply light low-pass smoothing
+
+This filter runs in Home Assistant, not on the RP2040. It should be merged into
+an existing Home Assistant configuration carefully if that installation already
+has top-level `template:` or `sensor:` sections.
 
 ## Sensor Wiring And Calibration
 
@@ -133,8 +158,14 @@ HC-SR04 pinout (Feather labels):
 
 Firmware calibration constants are in `arduino/ttn_otaa_lmic/config.h`:
 
+- `DISTANCE_SCALE`
+- `DISTANCE_OFFSET_M`
 - `GEOMETRY_REFERENCE_M`
 - `DATUM_OFFSET_M`
 
 Conversion formula:
-`tide_height_m = geometry_reference_m - measured_distance_m - datum_offset_m`
+`corrected_distance_m = measured_distance_m * distance_scale + distance_offset_m`
+`tide_height_m = geometry_reference_m - corrected_distance_m - datum_offset_m`
+
+Important electrical note:
+`HC-SR04 ECHO` is a 5V signal and must be level-shifted (or resistor-divided) before feeding RP2040 `D5` (3.3V-only input).
