@@ -1,0 +1,84 @@
+# Tide gauge filtering pipeline for Home Assistant
+#
+# Device:
+#   tidegauge-rp2040
+#
+# Raw source sensor:
+#   sensor.tide_height
+#
+# Purpose:
+#   Clean noisy ultrasonic tide-height readings while preserving the real,
+#   slow water-level signal in the creek.
+#
+# Pipeline:
+#   1) Hold the last valid numeric reading
+#   2) Take a rolling 10-minute median
+#   3) Reject remaining outliers
+#   4) Apply light low-pass smoothing
+#
+# Notes:
+# - This file is intended to be committed to GitHub as a self-contained config snippet.
+# - If your install already has top-level `template:` or `sensor:` keys elsewhere,
+#   merge these entries into those existing sections rather than duplicating keys.
+# - Range bounds are in meters. Adjust if your sensor uses feet or a different datum.
+
+template:
+  - triggers:
+      - trigger: state
+        entity_id: sensor.tide_height
+        not_to:
+          - "unknown"
+          - "unavailable"
+    sensor:
+      - name: "Tide Height Last Valid"
+        unique_id: tidegauge_rp2040_tide_height_last_valid
+        device_class: distance
+        state_class: measurement
+        unit_of_measurement: "m"
+        # Only updates when the source has a usable numeric value.
+        # This prevents brief invalid states from contaminating the pipeline.
+        state: "{{ trigger.to_state.state | float }}"
+
+sensor:
+  - platform: statistics
+    name: "Tide Height 10 Min Median"
+    unique_id: tidegauge_rp2040_tide_height_10_min_median
+    # Input is the "last valid" sensor, not the raw sensor directly.
+    entity_id: sensor.tide_height_last_valid
+    # Rolling median is the key step: it removes both high spikes and low dropouts
+    # much better than "minimum of last N samples", without introducing low bias.
+    state_characteristic: median
+    # Use a time window, not a sample count, because raw reports may not arrive at
+    # perfectly regular intervals.
+    max_age:
+      minutes: 10
+    # Keep the latest sample inside the window so the statistic remains usable even
+    # if reports are slightly sparse.
+    keep_last_sample: true
+    # Number of decimal places exposed by this helper.
+    precision: 3
+
+  - platform: filter
+    name: "Tide Height Filtered"
+    unique_id: tidegauge_rp2040_tide_height_filtered
+    # Input is the 10-minute rolling median helper.
+    entity_id: sensor.tide_height_10_min_median
+    filters:
+      - filter: range
+        # Hard physical sanity limits for the creek level.
+        # Adjust these if your normal operating range is different.
+        lower_bound: 0.0
+        upper_bound: 2.0
+
+      - filter: outlier
+        # Number of recent points considered by the outlier detector.
+        window_size: 7
+        # Maximum allowed deviation from recent history before a point is treated as
+        # an outlier. Lower = more aggressive rejection. Higher = more permissive.
+        radius: 0.08
+
+      - filter: lowpass
+        # Light smoothing after median + outlier rejection.
+        # Increase for a smoother but slower curve. Decrease for more responsiveness.
+        time_constant: 6
+        precision: 3

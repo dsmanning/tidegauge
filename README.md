@@ -122,6 +122,23 @@ Current uplink payload format is 6 bytes:
 - Bytes `2-3`: `raw_distance_mm` (unsigned uint16, big-endian)
 - Bytes `4-5`: `battery_mv` (unsigned uint16, big-endian)
 
+## Home Assistant Filtering
+
+The optional Home Assistant configuration in `homeassistant/tide_gauge_filter.yaml`
+adds a post-TTN filtering pipeline for the decoded tide-height sensor.
+
+Its purpose is to clean occasional ultrasonic outliers while preserving the slow
+water-level trend:
+
+1. hold the last valid numeric reading
+2. compute a 10-minute rolling median
+3. reject remaining outlier values outside recent history
+4. apply light low-pass smoothing
+
+This filter runs in Home Assistant, not on the RP2040. It should be merged into
+an existing Home Assistant configuration carefully if that installation already
+has top-level `template:` or `sensor:` sections.
+
 ## Sensor Wiring And Calibration
 
 HC-SR04 pinout (Feather labels):
