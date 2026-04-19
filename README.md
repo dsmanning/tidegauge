@@ -116,11 +116,19 @@ These are parsed at startup; invalid hex length/content aborts boot with a seria
 
 Use `ttn/uplink_decoder.js` as the TTN JavaScript uplink payload formatter.
 
-Current uplink payload format is 6 bytes:
+Current uplink payload format is 10 bytes:
 
 - Bytes `0-1`: `tide_height_mm` (signed int16, big-endian)
 - Bytes `2-3`: `raw_distance_mm` (unsigned uint16, big-endian)
 - Bytes `4-5`: `battery_mv` (unsigned uint16, big-endian)
+- Bytes `6-7`: `distance_stddev_mm` (unsigned uint16, big-endian)
+- Bytes `8-9`: `temperature_centi_c` (signed int16, big-endian)
+
+Invalid optional measurements use sentinel values so one failed sensor reading
+does not block the whole uplink:
+
+- signed invalid sentinel: `0x8000`
+- unsigned invalid sentinel: `0xFFFF`
 
 ## Home Assistant Filtering
 
