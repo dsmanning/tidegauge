@@ -96,6 +96,35 @@ def test_sketch_power_gates_sensor_when_configured_and_sleeps_in_idle_loop() -> 
     assert "sleep_ms(tg_config::IDLE_LOOP_SLEEP_MS);" in content
 
 
+def test_sketch_configures_adaptive_link_once_after_join() -> None:
+    sketch_path = Path("arduino/ttn_otaa_lmic/ttn_otaa_lmic.ino")
+    content = sketch_path.read_text(encoding="utf-8")
+
+    assert "static void configure_adaptive_lora_link()" in content
+    assert "LMIC_setAdrMode(tg_config::LORA_ADR_ENABLED ? 1 : 0);" in content
+    assert "LMIC_setLinkCheckMode(tg_config::LORA_ADR_ENABLED ? 1 : 0);" in content
+    assert "LMIC_setDrTxpow(DR_SF10, tg_config::LORA_UPLINK_TX_POWER_DBM);" in content
+    assert content.count("configure_adaptive_lora_link();") == 1
+
+    joined_case = content.index("case EV_JOINED:")
+    joined_end = content.index("case EV_JOIN_FAILED:")
+    assert "configure_adaptive_lora_link();" in content[joined_case:joined_end]
+
+    send_start = content.index("static void do_send(")
+    send_end = content.index("void onEvent(")
+    assert "LMIC_setDrTxpow" not in content[send_start:send_end]
+
+
+def test_sketch_logs_adaptive_lora_parameters_for_each_uplink() -> None:
+    sketch_path = Path("arduino/ttn_otaa_lmic/ttn_otaa_lmic.ino")
+    content = sketch_path.read_text(encoding="utf-8")
+
+    assert 'Serial.print(" lora_dr=");' in content
+    assert "Serial.print(static_cast<unsigned>(LMIC.datarate));" in content
+    assert 'Serial.print(" lora_tx_power_dbm=");' in content
+    assert "Serial.print(static_cast<int>(LMIC.adrTxPow));" in content
+
+
 def test_sketch_does_not_include_temporary_join_diagnostics() -> None:
     sketch_path = Path("arduino/ttn_otaa_lmic/ttn_otaa_lmic.ino")
     content = sketch_path.read_text(encoding="utf-8")

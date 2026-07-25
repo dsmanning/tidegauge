@@ -120,9 +120,10 @@ static float read_battery_voltage_v() {
     return battery_v;
 }
 
-static void configure_low_power_lora_uplink() {
+static void configure_adaptive_lora_link() {
     LMIC_setAdrMode(tg_config::LORA_ADR_ENABLED ? 1 : 0);
-    LMIC_setDrTxpow(LMIC.datarate, tg_config::LORA_UPLINK_TX_POWER_DBM);
+    LMIC_setLinkCheckMode(tg_config::LORA_ADR_ENABLED ? 1 : 0);
+    LMIC_setDrTxpow(DR_SF10, tg_config::LORA_UPLINK_TX_POWER_DBM);
 }
 
 static void restart_join_on_next_subband() {
@@ -303,7 +304,6 @@ static void do_send(osjob_t *j) {
         }
 
         power_off_ultrasonic_sensor();
-        configure_low_power_lora_uplink();
         LMIC_setTxData2(1, payload, sizeof(payload), 0);
         Serial.print("LMIC: queued uplink raw_distance_m=");
         Serial.print(measured_distance_m, 3);
@@ -317,6 +317,10 @@ static void do_send(osjob_t *j) {
         Serial.print(tide_height_m, 3);
         Serial.print(" battery_v=");
         Serial.print(battery_voltage_v, 3);
+        Serial.print(" lora_dr=");
+        Serial.print(static_cast<unsigned>(LMIC.datarate));
+        Serial.print(" lora_tx_power_dbm=");
+        Serial.print(static_cast<int>(LMIC.adrTxPow));
         Serial.print(" payload=");
         Serial.print(payload[0], HEX);
         Serial.print(" ");
@@ -351,8 +355,7 @@ void onEvent(ev_t ev) {
         case EV_JOINED:
             Serial.println("EV_JOINED");
             g_subband_fallback.note_joined();
-            configure_low_power_lora_uplink();
-            LMIC_setLinkCheckMode(0);
+            configure_adaptive_lora_link();
             do_send(&sendjob);
             break;
         case EV_JOIN_FAILED:

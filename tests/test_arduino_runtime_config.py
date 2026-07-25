@@ -33,11 +33,15 @@ def test_ultrasonic_sample_count_is_sixty_four_for_diagnostic_burst() -> None:
     assert "inline constexpr std::size_t ULTRASONIC_SAMPLE_COUNT = 64;" in content
 
 
-def test_lora_uplink_power_is_reduced_for_energy_savings() -> None:
+def test_lora_uplink_starts_with_full_link_margin() -> None:
     config_path = Path(__file__).resolve().parents[1] / "arduino" / "ttn_otaa_lmic" / "config.h"
     content = config_path.read_text(encoding="utf-8")
+    template_path = config_path.with_name("config.example.h")
+    template_content = template_path.read_text(encoding="utf-8")
+
     assert "inline constexpr bool LORA_ADR_ENABLED = true;" in content
-    assert "inline constexpr std::int8_t LORA_UPLINK_TX_POWER_DBM = 10;" in content
+    assert "inline constexpr std::int8_t LORA_UPLINK_TX_POWER_DBM = 20;" in content
+    assert "inline constexpr std::int8_t LORA_UPLINK_TX_POWER_DBM = 20;" in template_content
 
 
 def test_ds18b20_uses_d9_and_10_bit_resolution() -> None:
