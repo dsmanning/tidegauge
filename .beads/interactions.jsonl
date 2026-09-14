@@ -1,0 +1,2 @@
+{"id":"int-a36d9a35","kind":"field_change","created_at":"2026-09-14T18:18:48.1549501Z","actor":"github@dsmanning.com","issue_id":"tidegauge-jbg","extra":{"field":"status","new_value":"in_progress","old_value":"open"}}
+{"id":"int-ec305215","kind":"field_change","created_at":"2026-09-14T18:47:07.99106244Z","actor":"github@dsmanning.com","issue_id":"tidegauge-jbg","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Software reliability fixes implemented with passing host tests and Feather build; physical acceptance tracked separately."}}

@@ -1,6 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+import pytest
+
+# These are local installation checks, not portable firmware unit tests.
+pytestmark = pytest.mark.skipif(
+    not (Path(__file__).resolve().parents[1] / 'arduino/ttn_otaa_lmic/config.h').exists(),
+    reason='Local installation configuration is intentionally not committed',
+)
 
 
 def test_rapid_diagnostic_mode_disabled_for_lora_transmit_build() -> None:

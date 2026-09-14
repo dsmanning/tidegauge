@@ -69,3 +69,25 @@ def test_decoder_maps_invalid_sentinels_to_null() -> None:
             "temperature_c": None,
         }
     }
+
+
+def test_decoder_accepts_diagnostics_and_preserves_measurements() -> None:
+    decoded = _decode_with_node([0x01, 0x1B, 0x02, 0xE6, 0xff, 0xff, 0, 18, 8, 77,
+                                1, 12, 3, 2, 0, 1, 0, 0, 0, 2, 60, 4, 0, 5, 0, 33])['data']
+    assert decoded['tide_height_m'] == .283
+    assert decoded['battery_v'] is None
+    assert decoded['diagnostic_version'] == 1
+    assert decoded['firmware_revision'] == 2
+    assert decoded['uptime_s'] == 65536
+    assert decoded['reset_reason'] == 3
+    assert decoded['recovery_count'] == 2
+    assert decoded['valid_samples'] == 60
+    assert decoded['timeout_samples'] == 4
+    assert decoded['watchdog_boots'] == 5
+    assert decoded['measurement_sequence'] == 33
+    assert decoded['fault_flags'] == 12
+
+
+def test_decoder_rejects_unknown_diagnostic_schema_and_wrong_lengths() -> None:
+    assert 'errors' in _decode_with_node([0] * 11)
+    assert 'errors' in _decode_with_node([0] * 26)

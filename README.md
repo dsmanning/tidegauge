@@ -80,7 +80,11 @@ TDD impact:
 
 ## Project status
 
-Repository documentation initialized. Implementation will proceed in TDD cycles using the constraints and workflow defined in `AGENTS.md`.
+The production path is Arduino LMIC. The older Python/CircuitPython modules are
+retained for reference; their tests do not validate the deployed Arduino scheduler.
+Firmware orchestration is in `arduino/ttn_otaa_lmic/src/app`, hardware adapters in
+`src/adapters`, and injected contracts in `src/ports`. Pure payload/calibration
+logic is in `measurement.h` and `tide_math.h`.
 
 ## Pi-to-Feather Workflow
 
@@ -92,14 +96,54 @@ Use this sequence for deployment and runtime verification from the Raspberry Pi 
    `lsblk -f` and verify `/dev/sda` (mounted volume) plus `/dev/ttyACM0` (serial).
 3. Compile Arduino firmware:
    - First copy/edit config:
-     `cp arduino/ttn_otaa_lmic/config.example.h arduino/ttn_otaa_lmic/config.h`
+     `cp -n arduino/ttn_otaa_lmic/config.example.h arduino/ttn_otaa_lmic/config.h`
    - Set `DEV_EUI_HEX`, `APP_EUI_HEX`, `APP_KEY_HEX`, `US915_SUBBAND`, `GEOMETRY_REFERENCE_M`, and `DATUM_OFFSET_M` in `arduino/ttn_otaa_lmic/config.h`.
    - `config.h` is git-ignored by design; keep real credentials only in that local file.
-   `arduino-cli compile -b rp2040:rp2040:adafruit_feather_rfm arduino/ttn_otaa_lmic`
+   `bash scripts/compile_firmware.sh --output-dir build/firmware`
+   The build script explicitly selects US915/RFM95 and allocates **64 KB** of
+   LittleFS flash for the join-nonce journal. The default board setting has no
+   filesystem and cannot operate the persistent join allocator.
 4. Upload Arduino firmware:
-   `arduino-cli upload -b rp2040:rp2040:adafruit_feather_rfm -p /dev/ttyACM0 arduino/ttn_otaa_lmic`
+   Update the TTN decoder below first, then:
+   `arduino-cli upload -b rp2040:rp2040:adafruit_feather_rfm:flash=8388608_65536 -p /dev/ttyACM0 --input-dir build/firmware arduino/ttn_otaa_lmic`
 5. Monitor serial runtime logs on `/dev/ttyACM0` and verify a measurement/send cycle appears once per minute.
 6. Confirm uplinks in TTN for the same time window as serial logs.
+
+## Firmware Watchdog
+
+The hardware watchdog is armed before startup waits and peripheral initialization.
+It resets the RP2040 after **8 seconds** without a feed; unsupported delays above
+8388 ms fail compilation. The prior 20-second setting was invalid for RP2040.
+Ultrasonic acquisition now advances one pulse at a time (45 ms maximum blocking
+wait); settling, sample gaps and temperature conversion are scheduled stages.
+LMIC receives service between stages, and acquisition yields around radio deadlines.
+
+The supervisor also detects failures that leave the CPU running: a measurement
+cycle exceeding 30 seconds resets the sensor state, a second consecutive stall
+reboots; a joined radio with no progress for 3 minutes restarts joining, and a
+subsequent radio stall reboots. Joining receives a 30-minute progress deadline.
+Deliberate retry backoff (1 minute increasing to 1 hour) does not cause reboots.
+Normal join attempts count as local progress even when the gateway is offline.
+Local transmit completion does not prove network reception.
+
+Measurements start on a fixed 60-second schedule independent of radio joining.
+The latest completed measurement replaces older unsent data; there is no historical
+backfill. Invalid readings still produce a packet containing working fields.
+Default quality requirements are at least 16 valid samples out of 64 and a
+cluster of at least three. Physical echo bounds default to 0.02–6 m; customize
+`TIDEGAUGE_MIN_DISTANCE_M` / `TIDEGAUGE_MAX_DISTANCE_M` in local configuration.
+After three temperature failures the bus is rediscovered and reconfigured.
+
+ADR owns transmit power while enabled; the configured 10 dBm value applies only
+when ADR is disabled. LMIC link recovery is enabled. Verify link margin at the
+installed location and calculate airtime for the actual data rate; sampling once
+per minute need not imply that every network permits transmitting that often.
+
+Validated toolchain: Arduino CLI 1.4.1, Arduino-Pico 5.5.0, MCCI LMIC 5.0.1,
+OneWire 2.3.8, DallasTemperature 4.0.6. Host checks use pytest, g++, Node.js,
+PyYAML and Jinja2 already present on the development host. Build/test commands
+do not install dependencies. Physical acceptance procedures and remaining
+limitations are in [docs/reliability-validation.md](docs/reliability-validation.md).
 
 ## TTN Credentials (Arduino LMIC)
 
@@ -108,15 +152,28 @@ Set OTAA credentials in `arduino/ttn_otaa_lmic/config.h`:
 - `DEV_EUI_HEX`
 - `APP_EUI_HEX`
 - `APP_KEY_HEX`
-- `US915_SUBBAND` (typically `2` for TTN US915 setups)
+- `US915_SUBBAND`: human numbering **1–8**, converted to LMIC **0–7**. Value `2`
+  selects channels 8–15 (LMIC index 1). Confirm against the gateway frequency plan.
 
-These are parsed at startup; invalid hex length/content aborts boot with a serial error.
+Invalid credential syntax disables radio operation while sampling continues.
+Channel fallback visits every group and returns to the preferred group.
+
+Join nonces are reserved in blocks of 32 in `/join-nonce.bin` before use, using
+an atomic LittleFS replacement and read-back verification. Reboots skip unused
+reserved nonces. Preserve this filesystem and its allocation when updating
+firmware; never erase it for ordinary recovery. Only a completely blank allocated
+region is formatted automatically. Missing allocation, corrupt storage, failed
+writes, or exhausted 16-bit nonce space stop joins with a serial error, rather
+than silently reusing nonces. These faults require maintenance, not reboot loops.
+First migration from the old random-nonce firmware must be checked against TTN's
+stored nonce history and configured LoRaWAN version. Do not disable replay
+protection to make joins succeed; coordinate reprovisioning if necessary.
 
 ## TTN Payload Formatter
 
 Use `ttn/uplink_decoder.js` as the TTN JavaScript uplink payload formatter.
 
-Current uplink payload format is 10 bytes:
+Normal uplinks on FPort 1 retain the 10-byte payload:
 
 - Bytes `0-1`: `tide_height_mm` (signed int16, big-endian)
 - Bytes `2-3`: `raw_distance_mm` (unsigned uint16, big-endian)
@@ -129,6 +186,25 @@ does not block the whole uplink:
 
 - signed invalid sentinel: `0x8000`
 - unsigned invalid sentinel: `0xFFFF`
+
+Battery now also uses `0xFFFF` for unavailable, decoded as `null`.
+The first queued packet and every 15th thereafter attempt a diagnostic extension
+on FPort 2: **26 bytes** total, with the same first 10 bytes. Deploy the new decoder
+before the firmware. If the current data rate cannot carry the extension, the
+radio sends the 10-byte measurement at that data rate; diagnostic details may
+therefore be unavailable on a weak link.
+
+| Bytes | Diagnostic field (big-endian) |
+| --- | --- |
+| 10 | Schema version: 1 |
+| 11 | Fault bits: 0 height, 1 temperature, 2 battery, 3 echo stuck high |
+| 12 | Reset reason: 0 other/power-on, 1 sensor stall, 2 radio stall, 3 watchdog/other watchdog reset |
+| 13 | Firmware revision: 2 |
+| 14–17 | Uptime seconds (continues across `millis()` rollover) |
+| 18–19 | Recovery count since boot |
+| 20–21 | Valid echo count, timeout count |
+| 22–23 | Watchdog reset count retained across watchdog resets; clears on cold start |
+| 24–25 | Measurement sequence modulo 65536 |
 
 ## Home Assistant Filtering
 
@@ -146,6 +222,17 @@ water-level trend:
 This filter runs in Home Assistant, not on the RP2040. It should be merged into
 an existing Home Assistant configuration carefully if that installation already
 has top-level `template:` or `sensor:` sections.
+
+Add `homeassistant/tide_gauge_freshness.yaml` to track last packet, last valid
+height, and last valid temperature separately. It requires the actual TTN uplink
+MQTT topic bridged into Home Assistant's broker; replace the placeholder topic
+and merge the template lists. No account connection is configured by this repo.
+Stale indicators turn on after five minutes without the relevant report, even
+if filtering retains an old value. Use `sensor.tide_height_current` for the
+freshness-gated dashboard reading. The templates use the server's `received_at`
+timestamp, not MQTT replay/arrival time. See the official
+[MQTT trigger documentation](https://www.home-assistant.io/docs/automation/templating/)
+and [template integration](https://www.home-assistant.io/integrations/template).
 
 ## Sensor Wiring And Calibration
 

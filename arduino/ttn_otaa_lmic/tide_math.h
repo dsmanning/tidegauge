@@ -16,12 +16,13 @@ inline bool compute_tide_height_m(
     float datum_offset_m,
     float *out_tide_height_m
 ) {
-    if (out_tide_height_m == nullptr || measured_distance_m < 0.0f) {
+    if (out_tide_height_m == nullptr || !std::isfinite(geometry_reference_m) ||
+        !std::isfinite(measured_distance_m) || !std::isfinite(datum_offset_m) || measured_distance_m < 0.0f) {
         return false;
     }
 
     *out_tide_height_m = geometry_reference_m - measured_distance_m - datum_offset_m;
-    return true;
+    return std::isfinite(*out_tide_height_m);
 }
 
 inline bool apply_distance_calibration_m(
@@ -30,12 +31,14 @@ inline bool apply_distance_calibration_m(
     float distance_offset_m,
     float *out_corrected_distance_m
 ) {
-    if (out_corrected_distance_m == nullptr || measured_distance_m < 0.0f || distance_scale <= 0.0f) {
+    if (out_corrected_distance_m == nullptr || !std::isfinite(measured_distance_m) ||
+        !std::isfinite(distance_scale) || !std::isfinite(distance_offset_m) ||
+        measured_distance_m < 0.0f || distance_scale <= 0.0f) {
         return false;
     }
 
     const float corrected_m = (measured_distance_m * distance_scale) + distance_offset_m;
-    if (corrected_m < 0.0f) {
+    if (!std::isfinite(corrected_m) || corrected_m < 0.0f) {
         return false;
     }
 
@@ -48,12 +51,12 @@ inline bool distance_from_pulse_us(
     float speed_of_sound_m_per_us,
     float *out_distance_m
 ) {
-    if (out_distance_m == nullptr || pulse_us == 0UL || speed_of_sound_m_per_us <= 0.0f) {
+    if (out_distance_m == nullptr || pulse_us == 0UL || !std::isfinite(speed_of_sound_m_per_us) || speed_of_sound_m_per_us <= 0.0f) {
         return false;
     }
 
     *out_distance_m = (static_cast<float>(pulse_us) * speed_of_sound_m_per_us) / 2.0f;
-    return true;
+    return std::isfinite(*out_distance_m);
 }
 
 inline bool battery_voltage_from_adc_raw(
@@ -64,6 +67,7 @@ inline bool battery_voltage_from_adc_raw(
     float *out_battery_v
 ) {
     if (out_battery_v == nullptr || raw_adc < 0 || adc_max_raw <= 0 ||
+        !std::isfinite(adc_reference_v) || !std::isfinite(battery_divider_ratio) ||
         adc_reference_v <= 0.0f || battery_divider_ratio <= 0.0f) {
         return false;
     }
@@ -73,7 +77,7 @@ inline bool battery_voltage_from_adc_raw(
 
     const float adc_v = (static_cast<float>(raw_adc) * adc_reference_v) / static_cast<float>(adc_max_raw);
     *out_battery_v = adc_v * battery_divider_ratio;
-    return true;
+    return std::isfinite(*out_battery_v);
 }
 
 inline bool median_distance_m(const float *samples_m, std::size_t count, float *out_median_m) {
@@ -83,7 +87,7 @@ inline bool median_distance_m(const float *samples_m, std::size_t count, float *
 
     float sorted[100];
     for (std::size_t i = 0; i < count; ++i) {
-        if (samples_m[i] < 0.0f) {
+        if (!std::isfinite(samples_m[i]) || samples_m[i] < 0.0f) {
             return false;
         }
         sorted[i] = samples_m[i];
@@ -112,13 +116,14 @@ inline bool furthest_cluster_distance_stats_m(
     float *out_stddev_m
 ) {
     if (samples_m == nullptr || out_median_m == nullptr || out_stddev_m == nullptr ||
-        count == 0 || count > 100 || cluster_gap_threshold_m <= 0.0f || min_cluster_count == 0) {
+        count == 0 || count > 100 || !std::isfinite(cluster_gap_threshold_m) ||
+        cluster_gap_threshold_m <= 0.0f || min_cluster_count == 0) {
         return false;
     }
 
     float sorted[100];
     for (std::size_t i = 0; i < count; ++i) {
-        if (samples_m[i] < 0.0f) {
+        if (!std::isfinite(samples_m[i]) || samples_m[i] < 0.0f) {
             return false;
         }
         sorted[i] = samples_m[i];
@@ -154,8 +159,7 @@ inline bool furthest_cluster_distance_stats_m(
     }
 
     if (selected_start == count) {
-        selected_start = 0;
-        selected_end = count;
+        return false;
     }
 
     const std::size_t selected_count = selected_end - selected_start;
@@ -188,7 +192,7 @@ inline bool distance_stddev_m(const float *samples_m, std::size_t count, float *
 
     float sum_m = 0.0f;
     for (std::size_t i = 0; i < count; ++i) {
-        if (samples_m[i] < 0.0f) {
+        if (!std::isfinite(samples_m[i]) || samples_m[i] < 0.0f) {
             return false;
         }
         sum_m += samples_m[i];
@@ -216,6 +220,7 @@ inline bool encode_tide_height_payload(float tide_height_m, std::uint8_t out_pay
         return true;
     }
 
+    if (!std::isfinite(tide_height_m) || std::fabs(tide_height_m) > 32.768f) return false;
     const long tide_height_mm = lroundf(tide_height_m * 1000.0f);
     if (tide_height_mm < -32767L || tide_height_mm > 32767L) {
         return false;
@@ -238,6 +243,7 @@ inline bool encode_temperature_payload(float temperature_c, std::uint8_t out_pay
         return true;
     }
 
+    if (!std::isfinite(temperature_c) || std::fabs(temperature_c) > 327.68f) return false;
     const long temperature_centi_c = lroundf(temperature_c * 100.0f);
     if (temperature_centi_c < -32767L || temperature_centi_c > 32767L) {
         return false;
@@ -254,7 +260,7 @@ inline bool encode_distance_battery_payload(
     float battery_voltage_v,
     std::uint8_t out_payload[4]
 ) {
-    if (out_payload == nullptr || battery_voltage_v < 0.0f) {
+    if (out_payload == nullptr || !std::isfinite(battery_voltage_v) || battery_voltage_v < 0.0f || battery_voltage_v > 65.536f) {
         return false;
     }
 
@@ -262,7 +268,7 @@ inline bool encode_distance_battery_payload(
         out_payload[0] = 0xFF;
         out_payload[1] = 0xFF;
     } else {
-        if (measured_distance_m < 0.0f) {
+        if (!std::isfinite(measured_distance_m) || measured_distance_m < 0.0f || measured_distance_m > 65.536f) {
             return false;
         }
         const long distance_mm = lroundf(measured_distance_m * 1000.0f);
@@ -313,7 +319,7 @@ inline bool encode_tide_distance_battery_payload(
         out_payload[6] = 0xFF;
         out_payload[7] = 0xFF;
     } else {
-        if (distance_stddev_m < 0.0f) {
+        if (!std::isfinite(distance_stddev_m) || distance_stddev_m < 0.0f || distance_stddev_m > 65.536f) {
             return false;
         }
         const long stddev_mm = lroundf(distance_stddev_m * 1000.0f);

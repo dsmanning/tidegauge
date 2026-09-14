@@ -13,6 +13,8 @@ class SubbandFallback {
           join_txcomplete_count_(0) {}
 
     std::uint8_t current_subband() const { return current_subband_; }
+    // Configuration uses human-readable 1..8; LMIC uses 0..7.
+    std::uint8_t lmic_subband() const { return current_subband_ - 1; }
 
     bool note_join_txcomplete(std::uint8_t threshold) {
         if (threshold == 0) {
@@ -26,6 +28,11 @@ class SubbandFallback {
 
     void rotate_to_next() {
         join_txcomplete_count_ = 0;
+        if (++rotation_count_ == 8) {
+            rotation_count_ = 0;
+            current_subband_ = preferred_subband_;
+            return;
+        }
         if (current_subband_ == preferred_subband_) {
             current_subband_ = 1;
             if (current_subband_ == preferred_subband_) {
@@ -54,6 +61,7 @@ class SubbandFallback {
     std::uint8_t preferred_subband_;
     std::uint8_t current_subband_;
     std::uint8_t join_txcomplete_count_;
+    std::uint8_t rotation_count_ = 0;
 };
 
 }  // namespace tidegauge

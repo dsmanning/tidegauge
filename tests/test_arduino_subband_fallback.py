@@ -84,3 +84,22 @@ def test_subband_fallback_resets_join_attempt_counter_on_rotation() -> None:
 
     assert output == "wait wait rotate 1 wait"
 
+
+def test_rotation_covers_all_bands_and_returns_to_preferred() -> None:
+    output = _compile_and_run('''
+        #include <iostream>
+        #include "subband_fallback.h"
+        int main() {
+            for (unsigned preferred = 1; preferred <= 8; ++preferred) {
+                tidegauge::SubbandFallback f(preferred);
+                unsigned seen = 0;
+                for (unsigned i = 0; i < 8; ++i) {
+                    seen |= 1u << f.lmic_subband();
+                    f.rotate_to_next();
+                }
+                if (seen != 255 || f.current_subband() != preferred) return 1;
+            }
+            std::cout << "ok";
+        }
+    ''')
+    assert output == "ok"

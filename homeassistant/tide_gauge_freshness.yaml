@@ -1,0 +1,60 @@
+# Optional companion to tide_gauge_filter.yaml. Merge template lists, not keys.
+# Requires TTN uplinks bridged to Home Assistant's configured MQTT broker.
+# Replace the topic below with the actual application and device topic.
+# Use sensor.tide_height_current on dashboards instead of a held/filter value.
+# Server received_at timestamps prevent delayed/replayed MQTT packets from
+# making an old reading appear newly measured. Do not retain the uplink topic.
+template:
+  - triggers:
+      - trigger: mqtt
+        topic: "v3/REPLACE_APPLICATION@ttn/devices/REPLACE_DEVICE/up"
+    conditions:
+      - condition: template
+        value_template: "{{ as_timestamp(trigger.payload_json.get('received_at'), 0) > 0 }}"
+    sensor:
+      - name: "Tide Gauge Last Uplink"
+        unique_id: tidegauge_last_uplink
+        device_class: timestamp
+        state: "{{ trigger.payload_json.received_at }}"
+      - name: "Tide Gauge Last Valid Height"
+        unique_id: tidegauge_last_valid_height
+        device_class: timestamp
+        state: >-
+          {% set data = trigger.payload_json.get('uplink_message', {}).get('decoded_payload', {}) %}
+          {{ trigger.payload_json.received_at if is_number(data.get('tide_height_m')) else this.state }}
+      - name: "Tide Gauge Last Valid Temperature"
+        unique_id: tidegauge_last_valid_temperature
+        device_class: timestamp
+        state: >-
+          {% set data = trigger.payload_json.get('uplink_message', {}).get('decoded_payload', {}) %}
+          {{ trigger.payload_json.received_at if is_number(data.get('temperature_c')) else this.state }}
+  # now() reevaluates each minute, including when no packets arrive.
+  - binary_sensor:
+      - name: "Tide Gauge Link Stale"
+        unique_id: tidegauge_link_stale
+        device_class: problem
+        state: >-
+          {% set age = as_timestamp(now()) - as_timestamp(states('sensor.tide_gauge_last_uplink'), 0) %}
+          {{ age < 0 or age >= 300 }}
+      - name: "Tide Gauge Height Stale"
+        unique_id: tidegauge_height_stale
+        device_class: problem
+        state: >-
+          {% set age = as_timestamp(now()) - as_timestamp(states('sensor.tide_gauge_last_valid_height'), 0) %}
+          {{ age < 0 or age >= 300 }}
+      - name: "Tide Gauge Temperature Stale"
+        unique_id: tidegauge_temperature_stale
+        device_class: problem
+        state: >-
+          {% set age = as_timestamp(now()) - as_timestamp(states('sensor.tide_gauge_last_valid_temperature'), 0) %}
+          {{ age < 0 or age >= 300 }}
+    sensor:
+      - name: "Tide Height Current"
+        unique_id: tidegauge_height_current
+        device_class: distance
+        state_class: measurement
+        unit_of_measurement: "m"
+        availability: >-
+          {{ is_state('binary_sensor.tide_gauge_height_stale', 'off')
+             and is_number(states('sensor.tide_height_filtered')) }}
+        state: "{{ states('sensor.tide_height_filtered') | float(none) }}"

@@ -4,12 +4,17 @@
 #include <cstddef>
 #include <cstdint>
 
+#ifndef TIDEGAUGE_WATCHDOG_TIMEOUT_MS
+#define TIDEGAUGE_WATCHDOG_TIMEOUT_MS 8000U
+#endif
+
 namespace tg_config {
 
 // TTN OTAA credentials as uppercase/lowercase hex (no separators).
 inline constexpr char DEV_EUI_HEX[] = "0000000000000000";
 inline constexpr char APP_EUI_HEX[] = "0000000000000000";
 inline constexpr char APP_KEY_HEX[] = "00000000000000000000000000000000";
+// Human numbering 1..8. Firmware converts to LMIC indices 0..7.
 inline constexpr std::uint8_t US915_SUBBAND = 2;
 inline constexpr bool LORA_ADR_ENABLED = true;
 inline constexpr std::int8_t LORA_UPLINK_TX_POWER_DBM = 10;
