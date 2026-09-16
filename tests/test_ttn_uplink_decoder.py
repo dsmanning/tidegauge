@@ -69,3 +69,20 @@ def test_decoder_maps_invalid_sentinels_to_null() -> None:
             "temperature_c": None,
         }
     }
+
+
+def test_decoder_exposes_compact_sample_sequence_in_low_rate_payload() -> None:
+    decoded = _decode_with_node([0x01, 0x1B, 0x02, 0xE6, 0x0F, 0x6E, 0x00, 0x12, 0x08, 0x4D, 0x34])
+    assert decoded["data"]["sample_sequence"] == 0x34
+    assert decoded["data"]["session_start"] is False
+
+
+def test_decoder_marks_the_first_sample_of_a_session() -> None:
+    decoded = _decode_with_node([0x01, 0x1B, 0x02, 0xE6, 0x0F, 0x6E, 0x00, 0x12, 0x08, 0x4D, 0xB4])
+    assert decoded["data"]["sample_sequence"] == 0x34
+    assert decoded["data"]["session_start"] is True
+
+
+def test_decoder_keeps_legacy_sixteen_bit_sample_sequence() -> None:
+    decoded = _decode_with_node([0x01, 0x1B, 0x02, 0xE6, 0x0F, 0x6E, 0x00, 0x12, 0x08, 0x4D, 0x12, 0x34])
+    assert decoded["data"]["sample_sequence"] == 0x1234

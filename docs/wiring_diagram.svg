@@ -16,7 +16,7 @@
   </style>
 
   <text x="40" y="48" class="title">Remote Tide Gauge Circuit Diagram</text>
-  <text x="40" y="74" class="subtitle">Each Feather signal pin has its own labeled net. Only 3.3V and GND are shared rails.</text>
+  <text x="40" y="74" class="subtitle">Each Feather signal pin has its own labeled net. 3.3V, 5V, and GND rails are shown separately.</text>
 
   <rect x="40" y="130" width="360" height="540" class="module"/>
   <text x="65" y="166" class="label">Adafruit Feather RP2040 RFM</text>
@@ -140,10 +140,10 @@
   <line x1="850" y1="760" x2="900" y2="760" class="wire"/>
   <line x1="1010" y1="760" x2="1010" y2="930" class="wire"/>
 
-  <line x1="190" y1="90" x2="1320" y2="90" class="wire"/>
-  <line x1="1320" y1="90" x2="1320" y2="210" class="wire"/>
-  <line x1="1320" y1="210" x2="1350" y2="210" class="wire"/>
-  <circle cx="1320" cy="90" r="5" class="junction-dot"/>
+  <text x="1080" y="112" class="note">HC-SR04 VCC -> 5V</text>
+  <line x1="1160" y1="120" x2="1160" y2="210" class="wire"/>
+  <line x1="1160" y1="210" x2="1350" y2="210" class="wire"/>
+  <circle cx="1160" cy="210" r="5" class="junction-dot"/>
 
   <line x1="190" y1="90" x2="1290" y2="90" class="wire"/>
   <line x1="1290" y1="90" x2="1290" y2="510" class="wire"/>
@@ -165,5 +165,6 @@
   <line x1="962" y1="975" x2="978" y2="975" class="ground"/>
 
   <text x="1080" y="500" class="note">4.7k pull-up from NET_1WIRE to 3.3V</text>
-  <text x="40" y="1010" class="note">Only 3.3V and GND are common rails. Every other Feather pin now has its own labeled net so the connections are unambiguous.</text>
+  <text x="40" y="1010" class="note">3.3V powers DS18B20 and its pull-up. HC-SR04 uses 5V. Every signal pin has its own labeled net.</text>
+  <text x="40" y="1035" class="note">5V ECHO MUST NOT CONNECT DIRECTLY to RP2040 D5: install a level shifter or resistor divider between HC-SR04 ECHO and NET_ECHO.</text>
 </svg>

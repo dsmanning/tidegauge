@@ -85,6 +85,24 @@ def test_compute_tide_height_rejects_negative_distance() -> None:
     assert output == "invalid"
 
 
+def test_compute_tide_height_rejects_nonfinite_distance() -> None:
+    output = _compile_and_run(
+        """
+        #include <cmath>
+        #include <iostream>
+        #include "tide_math.h"
+
+        int main() {
+            float tide_height_m = 0.0f;
+            std::cout << (tidegauge::compute_tide_height_m(2.5f, INFINITY, 0.2f, &tide_height_m) ? "ok" : "invalid");
+            return 0;
+        }
+        """
+    )
+
+    assert output == "invalid"
+
+
 def test_encode_tide_height_rejects_out_of_range_payload() -> None:
     output = _compile_and_run(
         """
@@ -94,6 +112,24 @@ def test_encode_tide_height_rejects_out_of_range_payload() -> None:
         int main() {
             std::uint8_t payload[2] = {0, 0};
             std::cout << (tidegauge::encode_tide_height_payload(50.0f, payload) ? "ok" : "invalid");
+            return 0;
+        }
+        """
+    )
+
+    assert output == "invalid"
+
+
+def test_encode_tide_height_rejects_infinite_value() -> None:
+    output = _compile_and_run(
+        """
+        #include <cmath>
+        #include <iostream>
+        #include "tide_math.h"
+
+        int main() {
+            std::uint8_t payload[2] = {0, 0};
+            std::cout << (tidegauge::encode_tide_height_payload(INFINITY, payload) ? "ok" : "invalid");
             return 0;
         }
         """
@@ -210,6 +246,25 @@ def test_median_distance_requires_non_negative_samples() -> None:
     assert output == "invalid"
 
 
+def test_median_distance_rejects_nonfinite_samples() -> None:
+    output = _compile_and_run(
+        """
+        #include <cmath>
+        #include <iostream>
+        #include "tide_math.h"
+
+        int main() {
+            float samples[3] = {1.0f, INFINITY, 1.1f};
+            float result_m = 0.0f;
+            std::cout << (tidegauge::median_distance_m(samples, 3, &result_m) ? "ok" : "invalid");
+            return 0;
+        }
+        """
+    )
+
+    assert output == "invalid"
+
+
 def test_median_distance_supports_ten_samples() -> None:
     output = _compile_and_run(
         """
@@ -306,6 +361,26 @@ def test_furthest_cluster_distance_stats_rejects_tiny_far_outlier_cluster() -> N
     assert output == "0.6774"
 
 
+def test_furthest_cluster_distance_stats_rejects_when_no_cluster_meets_minimum() -> None:
+    output = _compile_and_run(
+        """
+        #include <iostream>
+        #include "tide_math.h"
+
+        int main() {
+            float samples[3] = {0.2f, 0.6f, 1.0f};
+            float median_m = 0.0f;
+            float stddev_m = 0.0f;
+            std::cout << (tidegauge::furthest_cluster_distance_stats_m(
+                samples, 3, 0.15f, 2, &median_m, &stddev_m) ? "accepted" : "rejected");
+            return 0;
+        }
+        """
+    )
+
+    assert output == "rejected"
+
+
 def test_distance_stddev_m_computes_population_standard_deviation() -> None:
     output = _compile_and_run(
         """
@@ -326,6 +401,41 @@ def test_distance_stddev_m_computes_population_standard_deviation() -> None:
     )
 
     assert output == "0.0866"
+
+
+def test_versioned_payload_appends_sample_sequence() -> None:
+    output = _compile_and_run(
+        """
+        #include <iostream>
+        #include "tide_math.h"
+        int main() {
+            std::uint8_t payload[11] = {};
+            if (!tidegauge::encode_tide_distance_battery_payload_with_sequence(
+                    0.283f, 0.742f, 3.95f, 0.018f, 21.25f, 0x34, payload)) return 1;
+            std::cout << static_cast<unsigned>(payload[10]);
+        }
+        """
+    )
+    assert output == "52"
+
+
+def test_versioned_payload_marks_the_first_sample_of_a_session() -> None:
+    output = _compile_and_run(
+        """
+        #include <iostream>
+        #include "tide_math.h"
+
+        int main() {
+            std::uint8_t payload[11] = {};
+            if (!tidegauge::encode_tide_distance_battery_payload_with_session_marker(
+                    0.283f, 0.742f, 3.95f, 0.018f, 21.25f, 0x34, true, payload)) return 1;
+            std::cout << static_cast<unsigned>(payload[10]);
+            return 0;
+        }
+        """
+    )
+
+    assert output == "180"
 
 
 def test_distance_stddev_m_rejects_invalid_inputs() -> None:

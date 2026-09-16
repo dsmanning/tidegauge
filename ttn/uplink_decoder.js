@@ -1,7 +1,7 @@
 function decodeUplink(input) {
   const bytes = input.bytes || [];
-  if (bytes.length !== 10) {
-    return { errors: [`Expected 10-byte payload, got ${bytes.length}`] };
+  if (bytes.length !== 10 && bytes.length !== 11 && bytes.length !== 12) {
+    return { errors: [`Expected 10-, 11-, or 12-byte payload, got ${bytes.length}`] };
   }
 
   function readInt16BE(msb, lsb) {
@@ -38,7 +38,7 @@ function decodeUplink(input) {
   const stddev = decodeUnsignedWithInvalid(bytes[6], bytes[7], 1000);
   const temperature = decodeSignedWithInvalid(bytes[8], bytes[9], 100);
 
-  return {
+  const result = {
     data: {
       tide_height_mm: tide.raw,
       tide_height_m: tide.scaled,
@@ -52,4 +52,11 @@ function decodeUplink(input) {
       temperature_c: temperature.scaled,
     }
   };
+  if (bytes.length === 11) {
+    result.data.session_start = (bytes[10] & 0x80) !== 0;
+    result.data.sample_sequence = bytes[10] & 0x7f;
+  } else if (bytes.length === 12) {
+    result.data.sample_sequence = readUInt16BE(bytes[10], bytes[11]);
+  }
+  return result;
 }

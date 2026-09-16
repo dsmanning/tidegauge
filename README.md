@@ -86,8 +86,19 @@ Repository documentation initialized. Implementation will proceed in TDD cycles 
 
 Use this sequence for deployment and runtime verification from the Raspberry Pi host.
 
+Install the host tools once:
+
+```bash
+sudo apt-get install -y python3.14-venv arduino-cli
+python3.14 -m venv /tmp/tidegauge-venv
+/tmp/tidegauge-venv/bin/pip install pytest
+arduino-cli core update-index --additional-urls https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json
+arduino-cli core install rp2040:rp2040 --additional-urls https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json
+arduino-cli lib install "MCCI LoRaWAN LMIC library" OneWire DallasTemperature
+```
+
 1. Run host tests:
-   `python3 -m pytest -q`
+   `PYTHONPATH=. /tmp/tidegauge-venv/bin/python -m pytest -q`
 2. Confirm device connectivity:
    `lsblk -f` and verify `/dev/sda` (mounted volume) plus `/dev/ttyACM0` (serial).
 3. Compile Arduino firmware:
@@ -99,6 +110,16 @@ Use this sequence for deployment and runtime verification from the Raspberry Pi 
 4. Upload Arduino firmware:
    `arduino-cli upload -b rp2040:rp2040:adafruit_feather_rfm -p /dev/ttyACM0 arduino/ttn_otaa_lmic`
 5. Monitor serial runtime logs on `/dev/ttyACM0` and verify a measurement/send cycle appears once per minute.
+
+### Offline field firmware installation
+
+When internet access is unavailable, use the checked-in deployment script from this checkout. It does not install or download anything; the Arduino RP2040 core and libraries must already be present on the laptop.
+
+```bash
+./scripts/install_firmware_offline.sh
+```
+
+Connect the Feather first. The script compiles locally, uploads, and verifies the firmware using `/dev/ttyACM0`. For another device path, run `PORT=/dev/ttyACM1 ./scripts/install_firmware_offline.sh`. It requires the local, git-ignored `arduino/ttn_otaa_lmic/config.h` containing this device's credentials.
 6. Confirm uplinks in TTN for the same time window as serial logs.
 
 ## TTN Credentials (Arduino LMIC)
@@ -116,11 +137,19 @@ These are parsed at startup; invalid hex length/content aborts boot with a seria
 
 Use `ttn/uplink_decoder.js` as the TTN JavaScript uplink payload formatter.
 
-Current uplink payload format is 6 bytes:
+Current uplink payload format is 11 bytes, which fits the lowest US915 data-rate payload budget. The decoder also accepts legacy 10- and 12-byte payloads:
 
 - Bytes `0-1`: `tide_height_mm` (signed int16, big-endian)
 - Bytes `2-3`: `raw_distance_mm` (unsigned uint16, big-endian)
 - Bytes `4-5`: `battery_mv` (unsigned uint16, big-endian)
+- Bytes `6-7`: distance standard deviation in millimeters (unsigned uint16, big-endian)
+- Bytes `8-9`: temperature in hundredths of a degree Celsius (signed int16, big-endian)
+- Byte `10`: compact session marker and sample sequence: bit 7 marks the first sample after boot, bits 0-6 are a rolling sample sequence
+
+The compact sequence rolls over every 128 captures. The `session_start` marker distinguishes a reboot from ordinary sequence rollover and helps identify missing or delayed uplinks. Legacy 10-byte payloads and earlier 12-byte payloads remain decodable.
+The DS18B20 temperature field reports water temperature (target accuracy ±0.5 °C). It is telemetry only; it is not applied to ultrasonic speed-of-sound compensation because the acoustic path is air.
+
+Distance quality rules reject nonfinite values and readings outside configured physical limits. A configurable tide-rate check marks unusually large changes as `suspect`; it preserves the reading for review instead of silently discarding a genuine rapid tide change. Invalid and suspect states are combined with invalid taking precedence.
 
 ## Sensor Wiring And Calibration
 

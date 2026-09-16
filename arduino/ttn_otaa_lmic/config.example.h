@@ -23,6 +23,11 @@ inline constexpr std::uint32_t ULTRASONIC_TIMEOUT_US = 45000;
 inline constexpr int DS18B20_DATA_PIN = 9;
 inline constexpr std::uint8_t DS18B20_RESOLUTION_BITS = 10;
 inline constexpr std::uint32_t IDLE_LOOP_SLEEP_MS = 5;
+inline constexpr std::uint32_t JOIN_DEADLINE_S = 180;
+inline constexpr std::uint32_t TX_PENDING_DEADLINE_S = 120;
+inline constexpr std::uint32_t MAX_RECOVERY_BACKOFF_S = 600;
+// RP2040 watchdog hardware supports at most about 8.3 seconds.
+inline constexpr std::uint32_t WATCHDOG_TIMEOUT_MS = 8000;
 inline constexpr float SPEED_OF_SOUND_M_PER_US = 0.000343f;
 
 // Site calibration constants:

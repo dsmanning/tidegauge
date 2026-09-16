@@ -26,3 +26,5 @@ def test_wiring_diagram_assets_exist_and_include_expected_labels() -> None:
     assert "NET_1WIRE" in content
     assert "NET_PWR_EN" in content
     assert "NET_BAT_SENSE" in content
+    assert "5V ECHO MUST NOT CONNECT DIRECTLY" in content
+    assert "HC-SR04 VCC -> 5V" in content
