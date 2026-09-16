@@ -1,7 +1,7 @@
 function decodeUplink(input) {
   const bytes = input.bytes || [];
-  if (bytes.length !== 10 && bytes.length !== 26) {
-    return { errors: [`Expected 10- or 26-byte payload, got ${bytes.length}`] };
+  if (bytes.length !== 10 && bytes.length !== 11 && bytes.length !== 12 && bytes.length !== 26) {
+    return { errors: [`Expected 10-, 11-, 12-, or 26-byte payload, got ${bytes.length}`] };
   }
   if (bytes.length === 26 && bytes[10] !== 1) {
     return { errors: ['Unsupported diagnostic schema'] };
@@ -68,6 +68,11 @@ function decodeUplink(input) {
       watchdog_boots: readUInt16BE(bytes[22], bytes[23]),
       measurement_sequence: readUInt16BE(bytes[24], bytes[25]),
     });
+  } else if (bytes.length === 11) {
+    result.data.session_start = (bytes[10] & 0x80) !== 0;
+    result.data.sample_sequence = bytes[10] & 0x7f;
+  } else if (bytes.length === 12) {
+    result.data.sample_sequence = readUInt16BE(bytes[10], bytes[11]);
   }
   return result;
 }

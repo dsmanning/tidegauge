@@ -88,6 +88,22 @@ def test_decoder_accepts_diagnostics_and_preserves_measurements() -> None:
     assert decoded['fault_flags'] == 12
 
 
+def test_decoder_accepts_compact_session_marker_payload() -> None:
+    decoded = _decode_with_node([
+        0x01, 0x1B, 0x02, 0xE6, 0x0F, 0x6E, 0x00, 0x12, 0x08, 0x4D, 0x95,
+    ])
+    assert decoded["data"]["sample_sequence"] == 0x15
+    assert decoded["data"]["session_start"] is True
+
+
+def test_decoder_accepts_legacy_twelve_byte_sequence_payload() -> None:
+    decoded = _decode_with_node([
+        0x01, 0x1B, 0x02, 0xE6, 0x0F, 0x6E, 0x00, 0x12, 0x08, 0x4D, 0x12, 0x34,
+    ])
+    assert decoded["data"]["sample_sequence"] == 0x1234
+
+
 def test_decoder_rejects_unknown_diagnostic_schema_and_wrong_lengths() -> None:
-    assert 'errors' in _decode_with_node([0] * 11)
+    assert 'errors' in _decode_with_node([0] * 9)
+    assert 'errors' in _decode_with_node([0] * 13)
     assert 'errors' in _decode_with_node([0] * 26)
