@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#081d2b">
+  <title>Tide Gauge</title>
+  <link rel="icon" href="/favicon.svg?v=1" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css?v=6">
+  <script src="/app.js?v=9" type="module"></script>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <p class="eyebrow"><span id="location">Church Creek</span> · Live conditions</p>
+        <h1>Tide Gauge</h1>
+      </div>
+      <div class="header-meta">
+        <button class="battery" id="battery" type="button" aria-label="Battery unavailable">
+          <span class="battery-shell"><span class="battery-fill" id="battery-fill"></span><span class="battery-label" id="battery-label">—</span></span>
+        </button>
+        <div class="status" id="status"><span></span><strong>Connecting</strong></div>
+      </div>
+    </header>
+
+    <section class="current" aria-labelledby="current-heading">
+      <div>
+        <p id="current-heading" class="label">Current tide height</p>
+        <p class="height"><span id="height">—</span><small id="unit"></small></p>
+        <p class="secondary" id="height-secondary">— ft</p>
+        <p class="updated" id="updated">Waiting for the first reading</p>
+      </div>
+      <section class="tide-state" id="tide-state" aria-live="polite" aria-label="Tide state">
+        <svg viewBox="0 0 28 40" aria-hidden="true"><path id="tide-icon-path" d="M3 20h22m-7-7 7 7-7 7" /></svg>
+        <div>
+          <p class="tide-flow" id="tide-flow">Awaiting prediction</p>
+          <p class="next-tide" id="next-tide">—</p>
+        </div>
+      </section>
+      <div class="temperature">
+        <p class="label">Water temperature</p>
+        <p class="temperature-value"><span id="temperature">—</span><small>°C</small></p>
+        <p class="secondary" id="temperature-secondary">— °F</p>
+      </div>
+    </section>
+
+    <section class="history" aria-labelledby="history-heading">
+      <div class="section-heading">
+        <div>
+          <p class="label">Recorded locally</p>
+          <h2 id="history-heading">Tide history</h2>
+        </div>
+        <div class="chart-controls">
+          <div class="ranges" role="group" aria-label="History range">
+            <button data-hours="6">6h</button>
+            <button data-hours="24" class="active">24h</button>
+            <button data-hours="168">7d</button>
+            <button data-hours="720">30d</button>
+          </div>
+          <label class="unit-toggle" for="unit-toggle">
+            <span>Metric</span>
+            <input id="unit-toggle" type="checkbox" role="switch" aria-label="Use American units">
+            <span class="switch-track" aria-hidden="true"></span>
+            <span>American</span>
+          </label>
+          <a class="download" href="/api/export.csv" download>Download CSV</a>
+        </div>
+      </div>
+      <div class="legend" aria-hidden="true"><span class="height-key">Tide height</span><span class="temperature-key">Water temperature</span></div>
+      <div class="chart-wrap">
+        <svg id="chart" viewBox="0 0 900 330" role="img" aria-labelledby="chart-title chart-description">
+          <title id="chart-title">Historic tide height</title>
+          <desc id="chart-description">A line chart of tide height over the selected period.</desc>
+        </svg>
+        <div class="chart-tooltip" id="chart-tooltip" role="status" hidden>
+          <p id="tooltip-time"></p>
+          <p id="tooltip-height"></p>
+          <p id="tooltip-temperature"></p>
+        </div>
+        <p class="empty" id="empty">History will appear as readings arrive.</p>
+      </div>
+    </section>
+  </main>
+  <dialog class="battery-dialog" id="battery-dialog" aria-labelledby="battery-dialog-title">
+    <form method="dialog"><button class="dialog-close" aria-label="Close battery history">×</button></form>
+    <p class="label">Tide gauge battery</p>
+    <h2 id="battery-dialog-title">Last 72 hours</h2>
+    <div class="battery-chart-wrap">
+      <svg id="battery-chart" viewBox="0 0 650 250" role="img" aria-label="Battery charge history"></svg>
+      <p class="empty" id="battery-empty">Battery history will appear as samples are recorded.</p>
+    </div>
+  </dialog>
+  <footer>Measurements reported by the tide sensor at <span id="footer-location">Church Creek</span>.</footer>
+</body>
+</html>
