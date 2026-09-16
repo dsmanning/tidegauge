@@ -236,6 +236,23 @@ and [template integration](https://www.home-assistant.io/integrations/template).
 
 ## Sensor Wiring And Calibration
 
+### Payload compatibility
+
+The TTN decoder accepts the deployed 10-byte measurement payload, the compact
+11-byte session-marker payload, the earlier 12-byte sequence payload, and the
+26-byte diagnostic payload produced by firmware revision 2. For 11-byte
+payloads, byte 10 uses bit 7 as `session_start` and bits 0–6 as the rolling
+sample sequence. For 12-byte payloads, bytes 10–11 contain the sequence as an
+unsigned big-endian integer. Keep the decoder installed before changing the
+firmware payload format.
+
+### Electrical safety
+
+The HC-SR04 is powered from 5V. Its ECHO output must pass through a level
+shifter or resistor divider before reaching RP2040 D5; never connect a 5V ECHO
+signal directly to the RP2040. The DS18B20 data line uses D9 with a 4.7k pullup
+to 3.3V.
+
 HC-SR04 pinout (Feather labels):
 
 - `TRIG` -> `D6`
